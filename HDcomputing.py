@@ -735,7 +735,7 @@ def apps():
         hd.confusionMatrix(suffix='')
 
 def normal():
-    hd = HD(mode='work', windowSize=1, downSample=64, dimension=10000, trainMethod='addFilter', seed=0, trainSliding=False, selectApp='lu',
+    hd = HD(mode='work', windowSize=2, downSample=16, dimension=10000, trainMethod='closest', seed=0, trainSliding=False, selectApp='lu',
             selectIntensity=[20,50,100])
     hd.genMetricVecs()
     hd.normalize()
