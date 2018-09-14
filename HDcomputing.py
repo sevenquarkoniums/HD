@@ -7,14 +7,13 @@ run by:
 
 
 ### TODO ###
-explain results.
+get nonConstantMetrics from all data.
 gradually reduce dataset.
 improve addFilter method.
-Grid search for addFilter method.
 
 ### warning ###
 1 need to use a fixed random seed.
-
+2 be careful with printing without newline.
 
 """
 #=========================
@@ -33,7 +32,7 @@ plt.switch_backend('agg')
 
 class HD:
     def __init__(self, env='dell', mode='work', outFile=None, outputEvery=False, windowSize=5, trainMethod='closest', downSample=1, dimension=10000, seed=0, 
-                 fakeMetricNum=8, fakeNoiseScale=0.3, trainSliding=False, withData=True, selectApp='all'):
+                 fakeMetricNum=8, fakeNoiseScale=0.3, trainSliding=False, withData=True, selectApp='all', selectIntensity=[20,50,100]):
         print('======================')
         self.env = env
         self.mode = mode# work, check.
@@ -46,14 +45,15 @@ class HD:
         self.downSample = downSample
         self.seed = seed
         self.selectApp = selectApp
+        self.selectIntensity = selectIntensity
         np.random.seed(self.seed) # not sensitive to this.
         
         if self.env == 'dell':
             self.dataFolder = 'C:/Programming/monitoring/data'
-            self.metricFileName = '%s/bt_X/nonzeroMetrics.txt' % self.dataFolder
+            self.metricFileName = 'C:/Programming/monitoring/HD/nonConstantMetrics.txt'
         elif self.env == 'scc':
             self.dataFolder = '/projectnb/peaclab-mon/yijia/data/volta'
-            self.metricFileName = '/projectnb/peaclab-mon/yijia/data/nonzeroMetrics.txt'
+            self.metricFileName = '/projectnb/peaclab-mon/yijia/HD/nonConstantMetrics.txt'
         self.numFold = 5
         self.closeCriterion = 0.05 # for d=10000, 0.01 is too small.
         self.sequenceMode = 'shift'# shift, permutate. Random permutate is 100x slow.
@@ -63,10 +63,9 @@ class HD:
         print('window size: %d, dimension: %d, seed: %d, downsampling: %d' % (self.windowSize, self.dimension, self.seed, self.downSample))
         if self.mode == 'work':
             self.marginCut = 60
+            self.types = ['dcopy','leak','linkclog','none']#,'dial','memeater'
             if withData:
                 self.readData()
-            else:
-                self.types = ['dcopy','dial','leak','memeater','linkclog','none']
         elif self.mode == 'check':
             self.metricNum = fakeMetricNum # larger value makes the result better.
             self.fakeNoiseScale = fakeNoiseScale
@@ -84,8 +83,7 @@ class HD:
             with open(self.metricFileName, 'r') as metricFile:
                 for line in metricFile:
                     self.metrics.append(line[:-1])
-            print('Only use %d metrics from nonzeroMetrics.txt.' % len(self.metrics))
-        self.types = ['dcopy','dial','leak','memeater','linkclog','none']
+            print('Only use %d metrics from nonConstantMetrics.txt.' % len(self.metrics))
         if self.selectApp == 'all':
             self.apps = ['bt','cg','CoMD','ft','kripke','lu','mg','miniAMR','miniGhost','miniMD','sp']
         else:
@@ -98,37 +96,20 @@ class HD:
             #  'dcopy': ...
             # }
             self.length[itype], self.start[itype] = {}, {}
-            
-            # These lines are for the 12-trace case.
-#            files = getfiles('%s/bt_X/%s_100' % (self.dataFolder, itype))
-#            fileIdx = 0
-#            for ifile in files:
-#                if int(ifile[-5]) == 1 and len(self.rawData[itype]) < 2:
-#                    df = pd.read_csv(ifile).iloc[self.marginCut:-self.marginCut]
-#                    if metricFileExist:
-#                        df = df[['#Time']+self.metrics]
-#                    if self.downSample > 1:
-#                        dfAvg = df.rolling(window=self.downSample).mean()
-#                        df = dfAvg[(self.downSample-1)::self.downSample]
-#                    self.length[itype][fileIdx] = len(df)
-#                    self.start[itype][fileIdx] = cumStart
-#                    cumStart += len(df)
-#                    self.rawData[itype].append(df)
-#                    fileIdx += 1
-            
-            if itype != 'none':
-                files = []
-                for iapp in self.apps:
-                    temp = getfiles('%s/%s_X/%s_100' % (self.dataFolder, iapp, itype))
-                    files += [x for x in temp if int(x[-5])==1]# only anomalous.
-            else:
-                files = []
-                for iapp in self.apps:
-                    for jtype in self.types:
-                        temp = getfiles('%s/%s_X/%s_100' % (self.dataFolder, iapp, jtype))
-                        if jtype != 'none':
-                            temp = [x for x in temp if int(x[-5])!=1]# only healthy.
-                        files += temp
+                        
+            files = []
+            for intensity in self.selectIntensity:
+                if itype != 'none':
+                    for iapp in self.apps:
+                        temp = getfiles('%s/%s_X/%s_%d' % (self.dataFolder, iapp, itype, intensity))
+                        files += [x for x in temp if int(x[-5])==1]# only anomalous.
+                else:
+                    for iapp in self.apps:
+                        for jtype in self.types:
+                            temp = getfiles('%s/%s_X/%s_%d' % (self.dataFolder, iapp, jtype, intensity))
+                            if jtype != 'none':
+                                temp = [x for x in temp if int(x[-5])!=1]# only healthy.
+                            files += temp
             fileIdx = 0
             for ifile in files:
                 df = pd.read_csv(ifile).iloc[self.marginCut:-self.marginCut]
@@ -271,9 +252,13 @@ class HD:
         encodeLen = 0
         start = timeit.default_timer()
         for itype in self.types:
-            print(itype)
+            print(itype, end='')
             self.encoded[itype] = {}
             for i in range(len(self.rawData[itype])):
+                for k in range(1, 20):
+                    if i == int(len(self.rawData[itype]) * k/20):
+                        print('#', end='')
+                        break
                 encodeLen += len(self.windows[itype][i])
                 self.encoded[itype][i] = []
                 thisTraceValues = self.normalized[itype][i][self.metrics].values
@@ -291,6 +276,7 @@ class HD:
                                 permutated = np.random.RandomState(seed=self.permutSeed).permutation(permutated)
                         windowHD = self.multiply(permutated, windowHD)
                     self.encoded[itype][i].append(windowHD)
+            print()
                     
         stop = timeit.default_timer()
         print('encoding time per sliding window: %.3f ms' % ((stop - start) * 1000 / encodeLen))
@@ -310,6 +296,9 @@ class HD:
         return np.multiply(a, b)
         
     def train(self):
+        '''
+        obsolete train and test without n-fold cross-validation.
+        '''
         from sklearn.model_selection import StratifiedKFold
         print('start training..')
         print('train method: %s' % self.trainMethod)
@@ -330,16 +319,7 @@ class HD:
                 labels.append(itype)
         skf = StratifiedKFold(n_splits=self.numFold)
         for trainIdx, self.testIdx in skf.split(self.combIdx, labels):
-            lenTrain = len(trainIdx)
-            for iitrainIdx, itrainIdx in enumerate(trainIdx):
-                
-                if iitrainIdx == int(lenTrain * 1/100 + 1):# just output percentage.
-                    print('training 1%%..')
-                for k in range(1, 10):
-                    if iitrainIdx == int(lenTrain * k/10):
-                        print('training %d0%%..' % k)
-                        break
-                
+            for iitrainIdx, itrainIdx in enumerate(trainIdx):                
                 itype, ifile = self.combIdx[itrainIdx]
                 for iwindow in range(0, len(self.encoded[itype][ifile]), self.windowSize):# only use periodic windows.
                     if self.trainMethod == 'HDadd':
@@ -371,21 +351,15 @@ class HD:
         return c
         
     def test(self):
+        '''
+        obsolete train and test without n-fold cross-validation.
+        '''
         from sklearn.metrics import f1_score, accuracy_score
         print('start predicting..')
         self.truth, self.predict = [], []
         testLength = 0
         start = timeit.default_timer()
-        lenTest = len(self.testIdx)
         for iitestIdx, itestIdx in enumerate(self.testIdx):
-                
-            if iitestIdx == int(lenTest * 1/100 + 1):# just output percentage.
-                print('testing 1%%..')
-            for k in range(1, 10):
-                if iitestIdx == int(lenTest * k/10):
-                    print('testing %d0%%..' % k)
-                    break
-            
             itype, ifile = self.combIdx[itestIdx]
             for iwindow in range(len(self.encoded[itype][ifile])):
                 testLength += len(self.encoded[itype][ifile])
@@ -443,13 +417,12 @@ class HD:
                 elif self.trainMethod == 'addFilter':
                     self.represent[itype] = self.encoded[itype][0][0]
             lenTrain = len(trainIdx)
+            print('training..', end='')
             for iitrainIdx, itrainIdx in enumerate(trainIdx):
                 
-                if iitrainIdx == int(lenTrain * 1/100 + 1):# just output percentage.
-                    print('training 1%%..')
-                for k in range(1, 10):
-                    if iitrainIdx == int(lenTrain * k/10):
-                        print('training %d0%%..' % k)
+                for k in range(1, 20):
+                    if iitrainIdx == int(lenTrain * k/20):
+                        print('#', end='')
                         break
                 
                 itype, ifile = self.combIdx[itrainIdx]
@@ -472,13 +445,12 @@ class HD:
             testLength = 0
             start = timeit.default_timer()
             lenTest = len(self.testIdx)
+            print('testing..', end='')
             for iitestIdx, itestIdx in enumerate(self.testIdx):
                 
-                if iitestIdx == int(lenTest * 1/100 + 1):# just output percentage.
-                    print('testing 1%%..')
-                for k in range(1, 10):
-                    if iitestIdx == int(lenTest * k/10):
-                        print('testing %d0%%..' % k)
+                for k in range(1, 20):
+                    if iitestIdx == int(lenTest * k/20):
+                        print('#', end='')
                         break
                 
                 itype, ifile = self.combIdx[itestIdx]
@@ -630,7 +602,7 @@ class HD:
     def diagnose(self):
         dfs = []
         for itype in self.types:
-            for ifile in range(len(self.normalized[itype])):
+            for ifile in range(len(self.normalized[itype])):# choose a random timestamp (downsampled) from each run and paste them together
                 randrow = np.random.randint(0, len(self.normalized[itype][ifile])-1)
                 oneRow = self.normalized[itype][ifile].iloc[[randrow]][self.metrics].copy()
                 oneRow['type'] = itype
@@ -750,32 +722,36 @@ def noise():
         hd.test()
 
 def apps():
+#    for app in ['bt','cg','CoMD','ft','kripke','lu','mg','miniAMR','miniGhost','miniMD','sp']:
     for app in ['bt','cg','CoMD','ft','kripke','lu','mg','miniAMR','miniGhost','miniMD','sp']:
-        hd = HD(mode='work', windowSize=5, downSample=64, dimension=10000, trainMethod='closest', seed=0, trainSliding=False, selectApp=app)
+        hd = HD(mode='work', windowSize=5, downSample=64, dimension=10000, trainMethod='closest', seed=0, trainSliding=False, selectApp=app,
+                selectIntensity=[20,50,100])
         hd.genMetricVecs()
         hd.normalize()
-        hd.draw()
-#        hd.slidingWindow()
-#        hd.encoding()
-#        hd.trainTest()
-#        hd.confusionMatrix(suffix='')
+#        hd.draw()
+        hd.slidingWindow()
+        hd.encoding()
+        hd.trainTest()
+        hd.confusionMatrix(suffix='')
 
 def normal():
-    hd = HD(mode='work', windowSize=5, downSample=64, dimension=10000, trainMethod='closest', seed=0, trainSliding=True, selectApp='kripke')
-#    hd.genMetricVecs()
-#    hd.normalize()
+    hd = HD(mode='work', windowSize=1, downSample=64, dimension=10000, trainMethod='addFilter', seed=0, trainSliding=False, selectApp='lu',
+            selectIntensity=[20,50,100])
+    hd.genMetricVecs()
+    hd.normalize()
 #    hd.diagnose()
-##    hd.draw()
-#    hd.slidingWindow()
-##    hd.baseline()
-#    hd.encoding()
-##    hd.checkCorrelation()
-#    hd.trainTest()
-#    hd.confusionMatrix(suffix='')
+#    hd.draw()
+    hd.slidingWindow()
+#    hd.baseline()
+    hd.encoding()
+#    hd.checkCorrelation()
+    hd.trainTest()
+    hd.confusionMatrix(suffix='')
 
 def scc():
     import sys
-    hd = HD(env='scc', mode='work', outputEvery=True, trainSliding=True, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]))
+    hd = HD(env='scc', mode='work', outputEvery=True, trainSliding=False, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), 
+                dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp='lu', selectIntensity=[20,50,100])
     hd.genMetricVecs()
     hd.normalize()
     hd.slidingWindow()
@@ -810,9 +786,9 @@ def gridSearch():
 #================================
 # main function starts.
 #apps()
-normal()
+#normal()
 #drawFromResult()
-#scc()
+scc()
 #gridSearch()
 #windowSize()
 #dimension()
