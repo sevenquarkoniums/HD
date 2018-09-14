@@ -382,6 +382,7 @@ class HD:
         stop = timeit.default_timer()
         print('testing time per sliding window: %.3f us' % ((stop - start) * 1000000 / testLength))
         f1 = f1_score(self.truth, self.predict, average='weighted')
+        self.f1 = f1
         accuracy = accuracy_score(self.truth, self.predict)
         print('f1: %.3f, accuracy: %.3f' % (f1, accuracy))
         if self.fout is not None:
@@ -477,6 +478,7 @@ class HD:
             fold += 1
             
         f1 = f1_score(self.truth, self.predict, average='weighted')
+        self.f1 = f1
         accuracy = accuracy_score(self.truth, self.predict)
         if self.outputEvery:
             results = pd.DataFrame(columns=['truth','predict'])
@@ -534,13 +536,11 @@ class HD:
     
         # Plot normalized confusion matrix
         plt.figure(figsize=(10,7))
-        self.plot_confusion_matrix(cnf_matrix, classes=self.types, normalize=True, suffix=suffix, 
-                              title='%s confusion matrix' % (classifier))    
+        self.plot_confusion_matrix(cnf_matrix, classes=self.types, normalize=True, suffix=suffix)    
 
     def plot_confusion_matrix(self, cm, classes,
                               normalize=True,
                               suffix='',
-                              title='Confusion matrix',
                               cmap=plt.cm.Blues):
         """
         This function prints and plots the confusion matrix.
@@ -554,7 +554,7 @@ class HD:
             print('Confusion matrix, without normalization')
         fs = 20
         plt.imshow(cm, interpolation='nearest', cmap=cmap)
-        plt.title(title, fontsize=fs)
+        plt.title('F1-score: %.3f' % self.f1, fontsize=fs)
         plt.colorbar()
         tick_marks = np.arange(len(classes))
         rev = classes.copy()
