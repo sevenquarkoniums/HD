@@ -30,6 +30,46 @@ import timeit
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
 
+def main():
+    #readResults()
+    #apps()
+    normal()
+    #drawFromResult()
+    #scc()
+    #gridSearch()
+    #windowSize()
+    #dimension()
+    #downSample()
+    #seed()
+    #metricNum()
+    #noise()
+    #reshape('C:/Programming/monitoring/data/bt_X/work_search_allbt.csv')
+
+def normal():
+    hd = HD(mode='work', windowSize=5, downSample=64, dimension=10000, trainMethod='HDadd', seed=0, trainSliding=False, selectApp='lu',
+            selectIntensity=[20,50,100])
+    hd.genMetricVecs()
+    hd.normalize()
+#    hd.diagnose()
+#    hd.draw()
+    hd.slidingWindow()
+#    hd.baseline()
+    hd.encoding()
+#    hd.checkCorrelation()
+    hd.trainTest()
+    hd.confusionMatrix(suffix='')
+
+def scc():
+    import sys
+    hd = HD(env='scc', mode='work', outputEvery=True, trainSliding=False, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), 
+                dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp='lu', selectIntensity=[20,50,100])
+    hd.genMetricVecs()
+    hd.normalize()
+    hd.slidingWindow()
+    hd.encoding()
+    hd.trainTest()
+    hd.confusionMatrix()
+    
 class HD:
     def __init__(self, env='dell', mode='work', outFile=None, outputEvery=False, windowSize=5, trainMethod='closest', downSample=1, dimension=10000, seed=0, 
                  fakeMetricNum=8, fakeNoiseScale=0.3, trainSliding=False, withData=True, selectApp='all', selectIntensity=[20,50,100]):
@@ -63,7 +103,7 @@ class HD:
         print('window size: %d, dimension: %d, seed: %d, downsampling: %d' % (self.windowSize, self.dimension, self.seed, self.downSample))
         if self.mode == 'work':
             self.marginCut = 60
-            self.types = ['dcopy','leak','linkclog','none']#,'dial','memeater'
+            self.types = ['dcopy','leak','linkclog','none']#,'dial','memeater' # this order will show in the matrix.
             if withData:
                 self.readData()
         elif self.mode == 'check':
@@ -528,7 +568,6 @@ class HD:
         else:
             suffix = '_window%d_downsample%d_trainWith%s_dim%d_seed%d%s' % (self.windowSize, self.downSample, self.trainMethod, 
                                                                       self.dimension, self.seed, aboutApp)
-        classifier = 'HD'
         # Compute confusion matrix
         cnf_matrix = confusion_matrix(self.truth, self.predict, labels=self.types)
         cnf_matrix = np.fliplr(cnf_matrix)
@@ -627,6 +666,30 @@ def getfiles(path):
             filepath = os.path.join(root, filename)
             fileList.append(filepath)
     return fileList
+
+def readResults():
+    from sklearn.metrics import f1_score
+    files = getfiles('C:/Programming/monitoring/HDcomputing/results_lu_4class')
+    collected = pd.DataFrame(columns=['Window Size', 'Downsample Rate', 'Train Method', 'Dimension', 'Seed', 'F1-score'])
+    for f in files:
+        if f[-3:] == 'csv':
+            fend = f.split('\\')[-1]
+            print(fend)
+            fsplit = fend.split('_')
+            window = int(fsplit[1][6:])
+            downsample = int(fsplit[2][10:])
+            trainWith = fsplit[3][9:]
+            dim = int(fsplit[4][3:])
+            seed = int(fsplit[5][4:])
+            df = pd.read_csv(f)
+            f1 = f1_score(df['truth'], df['predict'], average='weighted')
+            collected.loc[len(collected)] = [window, downsample, trainWith, dim, seed, f1]
+    collected.to_csv('C:/Programming/monitoring/HDcomputing/results_lu_4class/collected.csv', index=None)
+#    collected = pd.read_csv('C:/Programming/monitoring/HDcomputing/results_lu_4class/collected.csv')
+    for itrain in ['closest','HDadd','addFilter']:
+        thisTrain = collected[collected['Train Method']==itrain]
+        pivoted = thisTrain.pivot(index='Window Size', columns='Downsample Rate', values='F1-score')
+        pivoted.to_csv('C:/Programming/monitoring/HDcomputing/results_lu_4class/pivoted_%s.csv' % itrain)
 
 def reshape(csv):
     df = pd.read_csv(csv)
@@ -734,31 +797,6 @@ def apps():
         hd.trainTest()
         hd.confusionMatrix(suffix='')
 
-def normal():
-    hd = HD(mode='work', windowSize=2, downSample=16, dimension=10000, trainMethod='closest', seed=0, trainSliding=False, selectApp='lu',
-            selectIntensity=[20,50,100])
-    hd.genMetricVecs()
-    hd.normalize()
-#    hd.diagnose()
-#    hd.draw()
-    hd.slidingWindow()
-#    hd.baseline()
-    hd.encoding()
-#    hd.checkCorrelation()
-    hd.trainTest()
-    hd.confusionMatrix(suffix='')
-
-def scc():
-    import sys
-    hd = HD(env='scc', mode='work', outputEvery=True, trainSliding=False, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), 
-                dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp='lu', selectIntensity=[20,50,100])
-    hd.genMetricVecs()
-    hd.normalize()
-    hd.slidingWindow()
-    hd.encoding()
-    hd.trainTest()
-    hd.confusionMatrix()
-    
 def drawFromResult():
     for ws in [5]:
         for ds in [64]:
@@ -785,20 +823,8 @@ def gridSearch():
 
 #================================
 # main function starts.
-#apps()
-#normal()
-#drawFromResult()
-scc()
-#gridSearch()
-#windowSize()
-#dimension()
-#downSample()
-#seed()
-#metricNum()
-#noise()
-
-#reshape('C:/Programming/monitoring/data/bt_X/work_search_allbt.csv')
-
+if __name__ == '__main__':
+    main()
 
 print('finished in %d seconds.' % (datetime.datetime.now()-now).seconds)
 
