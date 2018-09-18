@@ -28,7 +28,7 @@ import numpy as np
 import os.path
 import timeit
 import matplotlib.pyplot as plt
-plt.switch_backend('agg')
+plt.switch_backend('agg') # for running in linux batch job.
 
 def main():
     #readResults()
@@ -46,8 +46,8 @@ def main():
     #reshape('C:/Programming/monitoring/data/bt_X/work_search_allbt.csv')
 
 def normal():
-    hd = HD(mode='work', windowSize=5, downSample=64, dimension=10000, trainMethod='HDadd', seed=0, trainSliding=False, selectApp='lu',
-            selectIntensity=[20,50,100])
+    hd = HD(mode='work', windowSize=5, downSample=64, dimension=10000, trainMethod='closest', seed=0, trainSliding=False, 
+            selectApp=['mg','kripke','lu'], selectIntensity=[20,50,100], anomalyTrain='all')
     hd.genMetricVecs()
     hd.normalize()
 #    hd.diagnose()
@@ -62,7 +62,7 @@ def normal():
 def scc():
     import sys
     hd = HD(env='scc', mode='work', outputEvery=True, trainSliding=False, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), 
-                dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp='lu', selectIntensity=[20,50,100])
+                dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp=['lu'], selectIntensity=[20,50,100])
     hd.genMetricVecs()
     hd.normalize()
     hd.slidingWindow()
@@ -71,8 +71,9 @@ def scc():
     hd.confusionMatrix()
     
 class HD:
-    def __init__(self, env='dell', mode='work', outFile=None, outputEvery=False, windowSize=5, trainMethod='closest', downSample=1, dimension=10000, seed=0, 
-                 fakeMetricNum=8, fakeNoiseScale=0.3, trainSliding=False, withData=True, selectApp='all', selectIntensity=[20,50,100]):
+    def __init__(self, env='dell', mode='work', outFile=None, outputEvery=False, windowSize=5, trainMethod='closest', downSample=1, 
+                 dimension=10000, seed=0, fakeMetricNum=8, fakeNoiseScale=0.3, trainSliding=False, withData=True, selectApp='all', 
+                 selectIntensity=[20,50,100], anomalyTrain='all'):
         print('======================')
         self.env = env
         self.mode = mode# work, check.
@@ -86,6 +87,7 @@ class HD:
         self.seed = seed
         self.selectApp = selectApp
         self.selectIntensity = selectIntensity
+        self.anomalyTrain = anomalyTrain
         np.random.seed(self.seed) # not sensitive to this.
         
         if self.env == 'dell':
@@ -100,10 +102,12 @@ class HD:
         self.permutSeed = 0
         self.rawData = {}
         self.length, self.start = {}, {}
-        print('window size: %d, dimension: %d, seed: %d, downsampling: %d' % (self.windowSize, self.dimension, self.seed, self.downSample))
+        print('window size: %d, dimension: %d, seed: %d, downsampling: %d, train method: %s' % 
+                    (self.windowSize, self.dimension, self.seed, self.downSample, self.trainMethod))
         if self.mode == 'work':
             self.marginCut = 60
             self.types = ['dcopy','leak','linkclog','none']#,'dial','memeater' # this order will show in the matrix.
+            print(self.types)
             if withData:
                 self.readData()
         elif self.mode == 'check':
@@ -127,7 +131,7 @@ class HD:
         if self.selectApp == 'all':
             self.apps = ['bt','cg','CoMD','ft','kripke','lu','mg','miniAMR','miniGhost','miniMD','sp']
         else:
-            self.apps = [self.selectApp]
+            self.apps = self.selectApp
         for itype in self.types:
             print('reading type %s data..' % itype)
             self.rawData[itype] = []
@@ -447,19 +451,33 @@ class HD:
         self.truth, self.predict = [], []
         fold = 0
         for trainIdx, self.testIdx in skf.split(self.combIdx, labels):
-        
             print('fold: %d..' % fold)
+            if self.anomalyTrain == 'all':
+                selectedTrainIdx = trainIdx
+            else:# reduce the training files here.
+                selectedTrainIdx = []
+                typeTrainIdx = {}
+                for itype in self.types:
+                    typeTrainIdx[itype] = []
+                for itrainIdx in trainIdx:
+                    itype, ifile = self.combIdx[itrainIdx]
+                    typeTrainIdx[itype].append(itrainIdx)
+                if fold == 0:
+                    print('Num. of training dcopy files in each fold: %d' % len(typeTrainIdx['dcopy']))
+#                selectedTrainIdx += typeTrainIdx['none']
+                selectedTrainIdx += list(np.random.choice( typeTrainIdx['none'], int(self.anomalyTrain/12 * len(typeTrainIdx['none'])) ))
+                for itype in self.types:
+                    if itype != 'none':
+                        selectedTrainIdx += list(np.random.choice(typeTrainIdx[itype], self.anomalyTrain))
+            print('training..', end='')
             self.represent = {}
             for itype in self.types:
-                if self.trainMethod == 'HDadd':
-                    self.represent[itype] = self.encoded[itype][0][0]
+                if self.trainMethod in ['HDadd','addFilter']:
+                    self.represent[itype] = []
                 elif self.trainMethod == 'closest':
                     self.represent[itype] = []
-                elif self.trainMethod == 'addFilter':
-                    self.represent[itype] = self.encoded[itype][0][0]
-            lenTrain = len(trainIdx)
-            print('training..', end='')
-            for iitrainIdx, itrainIdx in enumerate(trainIdx):
+            lenTrain = len(selectedTrainIdx)
+            for iitrainIdx, itrainIdx in enumerate(selectedTrainIdx):
                 
                 for k in range(1, 20):
                     if iitrainIdx == int(lenTrain * k/20):
@@ -471,13 +489,19 @@ class HD:
                     iwindowList = range(0, len(self.encoded[itype][ifile]))
                 else:
                     iwindowList = range(0, len(self.encoded[itype][ifile]), self.windowSize)
-                for iwindow in iwindowList:
+                for iiwindow, iwindow in enumerate(iwindowList):
                     if self.trainMethod == 'HDadd':
+                        if len(self.represent[itype]) != self.dimension:# for the first one.
+                            self.represent[itype] = self.encoded[itype][ifile][iwindow]
+                            break
                         if self.cos(self.represent[itype], self.encoded[itype][ifile][iwindow]) < 0.05:# only add unsimilar vectors.
                             self.represent[itype] = self.add(self.represent[itype], self.encoded[itype][ifile][iwindow])
                     elif self.trainMethod == 'closest':
                         self.represent[itype].append(self.encoded[itype][ifile][iwindow])
                     elif self.trainMethod == 'addFilter':
+                        if len(self.represent[itype]) != self.dimension:# for the first one.
+                            self.represent[itype] = self.encoded[itype][ifile][iwindow]
+                            break
                         self.represent[itype] = np.add(self.represent[itype], self.encoded[itype][ifile][iwindow])
                 if self.trainMethod == 'addFilter':
                     self.represent[itype][ self.represent[itype] >= 0 ] = 1
@@ -559,15 +583,15 @@ class HD:
     def confusionMatrix(self, suffix=''):
         from sklearn.metrics import confusion_matrix
         if self.selectApp != 'all':
-            aboutApp = '_' + self.selectApp
+            aboutApp = '_' + '-'.join(self.selectApp)
         else:
             aboutApp = ''
         if self.trainSliding:
             suffix = '_window%d_downsample%d_trainWith%s_dim%d_seed%d_trainSliding%s' % (self.windowSize, self.downSample, self.trainMethod, 
                                                                       self.dimension, self.seed, aboutApp)
         else:
-            suffix = '_window%d_downsample%d_trainWith%s_dim%d_seed%d%s' % (self.windowSize, self.downSample, self.trainMethod, 
-                                                                      self.dimension, self.seed, aboutApp)
+            suffix = '_window%d_downsample%d_trainWith%s_dim%d_seed%d_anomalyTrain%s%s' % (self.windowSize, self.downSample, self.trainMethod, 
+                                                                      self.dimension, self.seed, str(self.anomalyTrain), aboutApp)
         # Compute confusion matrix
         cnf_matrix = confusion_matrix(self.truth, self.predict, labels=self.types)
         cnf_matrix = np.fliplr(cnf_matrix)
@@ -787,7 +811,7 @@ def noise():
 def apps():
 #    for app in ['bt','cg','CoMD','ft','kripke','lu','mg','miniAMR','miniGhost','miniMD','sp']:
     for app in ['bt','cg','CoMD','ft','kripke','lu','mg','miniAMR','miniGhost','miniMD','sp']:
-        hd = HD(mode='work', windowSize=5, downSample=64, dimension=10000, trainMethod='closest', seed=0, trainSliding=False, selectApp=app,
+        hd = HD(mode='work', windowSize=5, downSample=64, dimension=10000, trainMethod='closest', seed=0, trainSliding=False, selectApp=[app],
                 selectIntensity=[20,50,100])
         hd.genMetricVecs()
         hd.normalize()
