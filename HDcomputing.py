@@ -177,12 +177,18 @@ class HD:
                                     for jintensity in [20,50,100]:# need to go to all intensities because of the discrepency between dell and scc files.
                                         temp = getfiles('%s/%s_X/%s_%d' % (self.dataFolder, iapp, jtype, jintensity))
                                         for ifile in temp:
-                                            runID = ifile.split('\\')[-1].split('_')[0]
+                                            if self.env == 'dell':
+                                                runID = ifile.split('\\')[-1].split('_')[0]
+                                            elif self.env == 'scc':
+                                                runID = ifile.split('/')[-1].split('_')[0]
                                             if runID in list(self.metafile['runID']):
                                                 files.append(ifile)
             fileIdx = 0
             for ifile in files:
-                runID = ifile.split('\\')[-1].split('_')[0]
+                if self.env == 'dell':
+                    runID = ifile.split('\\')[-1].split('_')[0]
+                elif self.env == 'scc':
+                    runID = ifile.split('/')[-1].split('_')[0]
                 node = int(ifile[-5])
                 df = pd.read_csv(ifile).iloc[self.marginCut:-self.marginCut]
                 if metricFileExist:
