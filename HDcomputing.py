@@ -33,9 +33,11 @@ plt.switch_backend('agg') # for running in linux batch job.
 def main():
     #readResults()
     #apps()
-    normal()
+#    generateFold()
+#    updateFold()
+#    normal()
     #drawFromResult()
-    #scc()
+    scc()
     #gridSearch()
     #windowSize()
     #dimension()
@@ -46,23 +48,27 @@ def main():
     #reshape('C:/Programming/monitoring/data/bt_X/work_search_allbt.csv')
 
 def normal():
-    hd = HD(mode='work', windowSize=5, downSample=64, dimension=10000, trainMethod='closest', seed=0, trainSliding=False, 
-            selectApp=['mg','kripke','lu'], selectIntensity=[20,50,100], anomalyTrain='all')
-    hd.genMetricVecs()
-    hd.normalize()
-#    hd.diagnose()
-#    hd.draw()
-    hd.slidingWindow()
-#    hd.baseline()
-    hd.encoding()
-#    hd.checkCorrelation()
+    hd = HD(mode='work', windowSize=5, downSample=9, dimension=10000, trainMethod='closest', seed=0, trainSliding=True, 
+            selectApp=['mg','kripke','lu'], selectIntensity=[100], anomalyTrain='all', metadata=10, withData=False)
+    if hd.withData:
+        hd.genMetricVecs()
+        hd.normalize()
+    #    hd.diagnose()
+    #    hd.draw()
+        hd.slidingWindow()
+    #    hd.baseline()
+        hd.encoding()
+    #    hd.checkCorrelation()
+    else:
+        hd.readEncoded()
     hd.trainTest()
     hd.confusionMatrix(suffix='')
 
 def scc():
     import sys
-    hd = HD(env='scc', mode='work', outputEvery=True, trainSliding=False, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), 
-                dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp=['lu'], selectIntensity=[20,50,100])
+    hd = HD(env='scc', mode='work', outputEvery=True, trainSliding=True, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), 
+                dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp=['mg','kripke','lu'], 
+                selectIntensity=[100], metadata=10)
     hd.genMetricVecs()
     hd.normalize()
     hd.slidingWindow()
@@ -73,7 +79,7 @@ def scc():
 class HD:
     def __init__(self, env='dell', mode='work', outFile=None, outputEvery=False, windowSize=5, trainMethod='closest', downSample=1, 
                  dimension=10000, seed=0, fakeMetricNum=8, fakeNoiseScale=0.3, trainSliding=False, withData=True, selectApp='all', 
-                 selectIntensity=[20,50,100], anomalyTrain='all'):
+                 selectIntensity=[20,50,100], anomalyTrain='all', metadata=None):
         print('======================')
         self.env = env
         self.mode = mode# work, check.
@@ -88,6 +94,8 @@ class HD:
         self.selectApp = selectApp
         self.selectIntensity = selectIntensity
         self.anomalyTrain = anomalyTrain
+        self.metadata = metadata
+        self.withData = withData
         np.random.seed(self.seed) # not sensitive to this.
         
         if self.env == 'dell':
@@ -105,9 +113,14 @@ class HD:
         print('window size: %d, dimension: %d, seed: %d, downsampling: %d, train method: %s' % 
                     (self.windowSize, self.dimension, self.seed, self.downSample, self.trainMethod))
         if self.mode == 'work':
-            self.marginCut = 60
+            self.marginCut = 60 # TPDS is using 30.
             self.types = ['dcopy','leak','linkclog','none']#,'dial','memeater' # this order will show in the matrix.
             print(self.types)
+            if self.metadata != None:
+                if self.env == 'dell':
+                    self.metafile = pd.read_csv('C:/Programming/monitoring/run_metadata_%d.csv' % self.metadata)
+                elif self.env == 'scc':
+                    self.metafile = pd.read_csv('/projectnb/peaclab-mon/cache/run_metadata_%d.csv' % self.metadata)
             if withData:
                 self.readData()
         elif self.mode == 'check':
@@ -134,10 +147,10 @@ class HD:
             self.apps = self.selectApp
         for itype in self.types:
             print('reading type %s data..' % itype)
-            self.rawData[itype] = []
+            self.rawData[itype] = {}
             # self.rawData:
-            # {'none':[DF1, DF2, DF3, ...]
-            #  'dcopy': ...
+            # {'dcopy':{(runID1, 1):DF1, (runID2, 1):DF2, (runID3, 1):DF3, ...}
+            #  'none': ...
             # }
             self.length[itype], self.start[itype] = {}, {}
                         
@@ -149,31 +162,49 @@ class HD:
                         files += [x for x in temp if int(x[-5])==1]# only anomalous.
                 else:
                     for iapp in self.apps:
-                        for jtype in self.types:
-                            temp = getfiles('%s/%s_X/%s_%d' % (self.dataFolder, iapp, jtype, intensity))
-                            if jtype != 'none':
-                                temp = [x for x in temp if int(x[-5])!=1]# only healthy.
-                            files += temp
+                        for jtype in self.types:# need to go into jtype folders to read none-type files.
+                            if self.metadata == None:
+                                temp = getfiles('%s/%s_X/%s_%d' % (self.dataFolder, iapp, jtype, intensity))
+                                if jtype != 'none':
+                                    temp = [x for x in temp if int(x[-5])!=1]# only healthy.
+                                files += temp
+                            else:
+                                if jtype != 'none':
+                                    temp = getfiles('%s/%s_X/%s_%d' % (self.dataFolder, iapp, jtype, intensity))
+                                    temp = [x for x in temp if int(x[-5])!=1]# only healthy.
+                                    files += temp
+                                elif jtype == 'none':
+                                    for jintensity in [20,50,100]:# need to go to all intensities because of the discrepency between dell and scc files.
+                                        temp = getfiles('%s/%s_X/%s_%d' % (self.dataFolder, iapp, jtype, jintensity))
+                                        for ifile in temp:
+                                            runID = ifile.split('\\')[-1].split('_')[0]
+                                            if runID in list(self.metafile['runID']):
+                                                files.append(ifile)
             fileIdx = 0
             for ifile in files:
+                runID = ifile.split('\\')[-1].split('_')[0]
+                node = int(ifile[-5])
                 df = pd.read_csv(ifile).iloc[self.marginCut:-self.marginCut]
                 if metricFileExist:
                     df = df[['#Time']+self.metrics]
                 if self.downSample > 1:
                     dfAvg = df.rolling(window=self.downSample).mean()
                     df = dfAvg[(self.downSample-1)::self.downSample]
-                self.length[itype][fileIdx] = len(df)
-                self.start[itype][fileIdx] = cumStart
+                self.length[itype][(runID, node)] = len(df)
+                self.start[itype][(runID, node)] = cumStart
                 cumStart += len(df)
-                self.rawData[itype].append(df)
+                self.rawData[itype][(runID, node)] = df
                 fileIdx += 1
         if not metricFileExist:
-            self.metrics = list(self.rawData['none'][0].columns)
+            self.metrics = list(self.rawData['none'][list(self.rawData['none'].keys())[0]].columns)
             self.metrics.remove('#Time')
         self.metricNum = len(self.metrics)
         print('Total trace number: %d' % sum([len(self.rawData[itype]) for itype in self.types]))
 
     def genFakeSeries(self):
+        '''
+        May have indexing problem because of the index (runID, nodeNum).
+        '''
         import math
         self.metrics = list(range(self.metricNum))
         self.types = ['a','b','c','d','e','f']
@@ -184,9 +215,9 @@ class HD:
             T[itype] = np.random.uniform(low=1, high=400, size=self.metricNum)
             phase[itype] = np.random.uniform(low=-math.pi, high=math.pi, size=self.metricNum)
         for itype in self.types:
-            self.rawData[itype] = []
-            self.length[itype] = []
-            self.start[itype] = []
+            self.rawData[itype] = {}
+            self.length[itype] = {}
+            self.start[itype] = {}
             for itrace in range(2):
                 df = pd.DataFrame(index=range(fakeLength), columns=['#Time'])
                 for imetric in range(self.metricNum):
@@ -197,9 +228,9 @@ class HD:
                 if self.downSample > 1:
                     dfAvg = df.rolling(window=self.downSample).mean()
                     df = dfAvg[(self.downSample-1)::self.downSample]
-                self.rawData[itype].append(df)
-                self.length[itype].append(len(df))
-                self.start[itype].append(cumStart)
+                self.rawData[itype][itrace] = df
+                self.length[itype][itrace] = len(df)
+                self.start[itype][itrace] = cumStart
                 cumStart += len(df)
 
     def genRandVec(self):
@@ -227,8 +258,8 @@ class HD:
         dfs = []
         for itype in self.types:
             self.normalized[itype] = {}
-            for i in range(len(self.rawData[itype])):
-                dfs.append(self.rawData[itype][i])
+            for ifile in self.rawData[itype].keys():
+                dfs.append(self.rawData[itype][ifile])
 #        print('start concatenation..')
         allData = pd.concat(dfs, ignore_index=True)
         allNormalized = allData[['#Time']].copy()
@@ -243,21 +274,25 @@ class HD:
         allNormalized[self.metrics] = pd.DataFrame(transformArray, index=allNormalized.index)
 #        plt.plot(allNormalized.iloc[:100][self.metrics])
         for itype in self.types:
-            for i in range(len(self.rawData[itype])):
-                self.normalized[itype][i] = allNormalized.iloc[self.start[itype][i]:(self.start[itype][i]+self.length[itype][i])]
+            for ifile in self.rawData[itype].keys():
+                self.normalized[itype][ifile] = allNormalized.iloc[self.start[itype][ifile]:(self.start[itype][ifile]+self.length[itype][ifile])]
     
     def slidingWindow(self):
         self.windows = {}
         for itype in self.types:
             self.windows[itype] = {}
-            for i in range(len(self.rawData[itype])):
-                self.windows[itype][i] = []
-                for istart in range(self.length[itype][i]-self.windowSize+1):
-                    thisWindow = self.normalized[itype][i].iloc[istart:(istart+self.windowSize)]
-                    self.windows[itype][i].append(thisWindow)
+            for ifile in self.rawData[itype].keys():
+                self.windows[itype][ifile] = []
+                for istart in range(self.length[itype][ifile]-self.windowSize+1):
+                    thisWindow = self.normalized[itype][ifile].iloc[istart:(istart+self.windowSize)]
+                    self.windows[itype][ifile].append(thisWindow)
 #        print('sliding windows generated.')
                     
     def baseline(self):
+        '''
+        The baseline which use nearest neighbor (in terms of matrix Frobenius norm) to predict anomaly.
+        The index may should be updated to work.
+        '''
         from sklearn.metrics import f1_score, accuracy_score
         self.represent = {}
         for itype in self.types:
@@ -298,18 +333,18 @@ class HD:
         for itype in self.types:
             print(itype, end='')
             self.encoded[itype] = {}
-            for i in range(len(self.rawData[itype])):
+            for i, ifile in enumerate(self.rawData[itype].keys()):
                 for k in range(1, 20):
                     if i == int(len(self.rawData[itype]) * k/20):
                         print('#', end='')
                         break
-                encodeLen += len(self.windows[itype][i])
-                self.encoded[itype][i] = []
-                thisTraceValues = self.normalized[itype][i][self.metrics].values
+                encodeLen += len(self.windows[itype][ifile])
+                self.encoded[itype][ifile] = []
+                thisTraceValues = self.normalized[itype][ifile][self.metrics].values
                 matmul = np.matmul(thisTraceValues, self.metricMatrix)# each line is an unfiltered HD vector for a timestamp.
                 matmul[matmul >=0] = 1
                 matmul[matmul < 0] = -1
-                for iwindow in range( len(self.windows[itype][i]) ):
+                for iwindow in range( len(self.windows[itype][ifile]) ):
                     windowHD = matmul[iwindow+self.windowSize-1, :]
                     for ivec in range(2, self.windowSize+1):
                         if self.sequenceMode == 'shift':
@@ -319,14 +354,14 @@ class HD:
                             for ipermut in range(ivec-1):
                                 permutated = np.random.RandomState(seed=self.permutSeed).permutation(permutated)
                         windowHD = self.multiply(permutated, windowHD)
-                    self.encoded[itype][i].append(windowHD)
+                    self.encoded[itype][ifile].append(windowHD)
             print()
                     
         stop = timeit.default_timer()
         print('encoding time per sliding window: %.3f ms' % ((stop - start) * 1000 / encodeLen))
-#        print('encoding finished.')
-#        with open('%s/bt_X/encoded.obj' % self.dataFolder, 'bw') as encodedDump:
-#            pickle.dump(self.encoded, encodedDump)
+        print('encoding finished.')
+        with open('%s/encoded.obj' % self.dataFolder, 'bw') as encodedDump:
+            pickle.dump(self.encoded, encodedDump)
 
     def genHDVec(self, dfTimepoint, metricVecs):
         HDVec = np.zeros(self.dimension)
@@ -339,46 +374,6 @@ class HD:
     def multiply(self, a, b):
         return np.multiply(a, b)
         
-    def train(self):
-        '''
-        obsolete train and test without n-fold cross-validation.
-        '''
-        from sklearn.model_selection import StratifiedKFold
-        print('start training..')
-        print('train method: %s' % self.trainMethod)
-        self.represent = {}
-        for itype in self.types:
-            if self.trainMethod == 'HDadd':
-                self.represent[itype] = self.encoded[itype][0][0]
-            elif self.trainMethod == 'closest':
-                self.represent[itype] = []
-            elif self.trainMethod == 'addFilter':
-                self.represent[itype] = self.encoded[itype][0][0]
-        
-        self.combIdx = []
-        labels = []
-        for itype in self.types:
-            for ifile in range(len(self.rawData[itype])):
-                self.combIdx.append((itype, ifile))
-                labels.append(itype)
-        skf = StratifiedKFold(n_splits=self.numFold)
-        for trainIdx, self.testIdx in skf.split(self.combIdx, labels):
-            for iitrainIdx, itrainIdx in enumerate(trainIdx):                
-                itype, ifile = self.combIdx[itrainIdx]
-                for iwindow in range(0, len(self.encoded[itype][ifile]), self.windowSize):# only use periodic windows.
-                    if self.trainMethod == 'HDadd':
-                        if self.cos(self.represent[itype], self.encoded[itype][ifile][iwindow]) < 0.05:# only add unsimilar vectors.
-                            self.represent[itype] = self.add(self.represent[itype], self.encoded[itype][ifile][iwindow])
-                    elif self.trainMethod == 'closest':
-                        self.represent[itype].append(self.encoded[itype][ifile][iwindow])
-                    elif self.trainMethod == 'addFilter':
-                        self.represent[itype] = np.add(self.represent[itype], self.encoded[itype][ifile][iwindow])
-                if self.trainMethod == 'addFilter':
-                    self.represent[itype][ self.represent[itype] >= 0 ] = 1
-                    self.represent[itype][ self.represent[itype] < 0 ] = -1
-                    
-            break # thus only get the 1st of all 5 iterations.
-
     def cos(self, a, b):
         if a.shape != b.shape:
             print('===Dimensions should be the same for calculating cosine distance.===')
@@ -394,48 +389,6 @@ class HD:
             c[idxNotEqual] = np.random.choice([-1, 1], len(idxNotEqual))
         return c
         
-    def test(self):
-        '''
-        obsolete train and test without n-fold cross-validation.
-        '''
-        from sklearn.metrics import f1_score, accuracy_score
-        print('start predicting..')
-        self.truth, self.predict = [], []
-        testLength = 0
-        start = timeit.default_timer()
-        for iitestIdx, itestIdx in enumerate(self.testIdx):
-            itype, ifile = self.combIdx[itestIdx]
-            for iwindow in range(len(self.encoded[itype][ifile])):
-                testLength += len(self.encoded[itype][ifile])
-                self.truth.append(itype)
-                product = {}
-                for testType in self.types:
-                    if self.trainMethod in ['HDadd', 'addFilter']:
-                        product[testType] = np.dot(self.encoded[itype][ifile][iwindow], self.represent[testType])
-                    elif self.trainMethod == 'closest':
-                        thisTypeProducts = []
-                        for itrain in self.represent[testType]:
-                            thisTypeProducts.append(np.dot(self.encoded[itype][ifile][iwindow], itrain))
-                            if self.cos(self.encoded[itype][ifile][iwindow], itrain) > self.closeCriterion:
-                                pass
-                                #print('Close vector detected: %s, %s' % (itype, testType))
-                        product[testType] = max(thisTypeProducts)
-                thisPredict = max(product, key=product.get)
-                self.predict.append(thisPredict)
-
-        stop = timeit.default_timer()
-        print('testing time per sliding window: %.3f us' % ((stop - start) * 1000000 / testLength))
-        f1 = f1_score(self.truth, self.predict, average='weighted')
-        self.f1 = f1
-        accuracy = accuracy_score(self.truth, self.predict)
-        print('f1: %.3f, accuracy: %.3f' % (f1, accuracy))
-        if self.fout is not None:
-            with open(self.fout, 'a') as f:
-                f.write('%d,%d,%d,%d,%s,%d,%.3f\n' % (self.metricNum, self.dimension, self.windowSize, self.downSample, 
-                                                      self.trainMethod, self.seed, f1))
-#                f.write('%d,%.2f,%d,%d,%d,%s,%d,%.3f\n' % (self.metricNum, self.fakeNoiseScale, self.dimension, self.windowSize, self.downSample, 
-#                                                      self.trainMethod, self.seed, f1))
-
     def trainTest(self):
         from sklearn.model_selection import StratifiedKFold
         from sklearn.metrics import f1_score, accuracy_score
@@ -444,15 +397,36 @@ class HD:
         self.combIdx = []
         labels = []
         for itype in self.types:
-            for ifile in range(len(self.rawData[itype])):
+            for ifile in self.encoded[itype].keys():
                 self.combIdx.append((itype, ifile))
                 labels.append(itype)
-        skf = StratifiedKFold(n_splits=self.numFold)
+        if self.metadata == None:
+            skf = StratifiedKFold(n_splits=self.numFold)
+            trainTestSets = skf.split(self.combIdx, labels)
+        else:
+            trainTestSets = []
+            for ifold in range(5):
+                trainSet, testSet = [], []
+                for idx, row in self.metafile.iterrows():
+                    thisFold = row['fold_0']
+                    thisRunID = row['runID']
+                    for nodeNum in range(4):
+                        if nodeNum == 1:
+                            thisType = row['anomaly']
+                        else:
+                            thisType = 'none'
+                        thisIdx = self.combIdx.index((thisType, (thisRunID, nodeNum)))
+                        if thisFold == ifold:
+                            trainSet.append(thisIdx)
+                        else:
+                            testSet.append(thisIdx)
+                trainTestSets.append((trainSet, testSet))
+                print('trainSetLen, testSetLen: %d, %d' % (len(trainSet), len(testSet)))
         self.truth, self.predict = [], []
         fold = 0
-        for trainIdx, self.testIdx in skf.split(self.combIdx, labels):
+        for trainIdx, self.testIdx in trainTestSets:
             print('fold: %d..' % fold)
-            if self.anomalyTrain == 'all':
+            if self.anomalyTrain == 'all' or self.metadata != None:
                 selectedTrainIdx = trainIdx
             else:# reduce the training files here.
                 selectedTrainIdx = []
@@ -564,7 +538,7 @@ class HD:
 
     def readEncoded(self):
         import pickle
-        readFile = open('%s/bt_X/encoded.obj' % self.dataFolder, 'rb')
+        readFile = open('%s/encoded.obj' % self.dataFolder, 'rb')
         self.encoded = pickle.load(readFile)
 
     def checkCorrelation(self):
@@ -681,7 +655,47 @@ class HD:
 #        concatenated = pd.concat(dfs, ignore_index=True)
 #        concatenated[['type']+self.metrics].to_csv('C:/Programming/monitoring/HDcomputing/diagnose_singleRun_downsample%d_%s.csv' 
 #                                                    % (self.downSample, self.selectApp), index=False)
-        
+
+def generateFold():
+    apps = ['kripke','lu','mg']
+    inputs = ['X']
+    intensities = [100]
+    classes = ['none','dcopy','leak','linkclog']
+    outputName = 'C:/Programming/monitoring/HD/folds_threeApps.csv'
+    df = pd.DataFrame(columns=['runID','folds'])
+    for app in apps:
+        for thisInput in inputs:
+            for intensity in intensities:
+                for thisClass in classes:
+                    path = 'C:/Programming/monitoring/data/%s_%s/%s_%d' % (app, thisInput, thisClass, intensity)
+                    files = getfiles(path)
+                    thisFold = 0
+                    for file in files:
+                        if file[-5] == '0':
+                            thisID = file.split('\\')[-1].split('_')[0]
+                            df.loc[len(df)] = [thisID, thisFold]
+                            thisFold += 1
+                            if thisFold == 5:
+                                thisFold = 0
+    df.to_csv(outputName, index=False)
+    metadata10 = pd.read_csv('C:/Programming/monitoring/run_metadata_10.csv')
+    for idx, row in metadata10.iterrows():
+        runID = row['runID']
+        print(runID)
+        thisFold = df[df['runID']==runID].iloc[0]['folds']# don't work. Because some none_20/50/100 are different from the scc version.
+        metadata10.at[idx, 'fold_0'] = thisFold
+    metadata10.to_csv('C:/Programming/monitoring/run_metadata_10_updated.csv', index=False)
+    
+def updateFold():
+    metadata10 = pd.read_csv('C:/Programming/monitoring/run_metadata_10.csv')
+    thisFold = 0
+    for idx, row in metadata10.iterrows():
+        metadata10.at[idx, 'fold_0'] = thisFold
+        thisFold += 1
+        if thisFold == 5:
+            thisFold = 0
+    metadata10.to_csv('C:/Programming/monitoring/run_metadata_10_updated.csv', index=False)
+    
 def getfiles(path):
     # get all the files with full path.
     fileList = []
