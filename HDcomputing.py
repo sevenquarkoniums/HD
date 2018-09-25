@@ -8,7 +8,6 @@ run by:
 
 ### TODO ###
 get nonConstantMetrics from all data.
-gradually reduce dataset.
 improve addFilter method.
 
 ### warning ###
@@ -67,8 +66,8 @@ def normal():
 def scc():
     import sys
     hd = HD(env='scc', mode='work', outputEvery=True, trainSliding=True, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), 
-                dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp=['mg','kripke','lu'], 
-                selectIntensity=[100], metadata=10)
+                dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp='all', 
+                selectIntensity=[100], metadata=11)
     hd.genMetricVecs()
     hd.normalize()
     hd.slidingWindow()
