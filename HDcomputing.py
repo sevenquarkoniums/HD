@@ -30,13 +30,14 @@ import matplotlib.pyplot as plt
 plt.switch_backend('agg') # for running in linux batch job.
 
 def main():
+    drawTPDS()
     #readResults()
     #apps()
 #    generateFold()
 #    updateFold()
 #    normal()
     #drawFromResult()
-    scc()
+#    scc()
     #gridSearch()
     #windowSize()
     #dimension()
@@ -604,7 +605,7 @@ class HD:
         plt.xticks(tick_marks, rev, rotation=45, fontsize=fs)
         plt.yticks(tick_marks, classes, fontsize=fs)
     
-        fmt = '.2f' if normalize else 'd'
+        fmt = '.3f' if normalize else 'd'
         thresh = cm.max() / 2.
         for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
             plt.text(j, i, format(cm[i, j], fmt), fontsize=fs,
@@ -863,6 +864,47 @@ def gridSearch():
             hd.checkCorrelation()
             hd.train()
             hd.test()
+
+def drawTPDS():
+    file = pd.read_hdf('C:/Programming/monitoring/HDcomputing/results_allApps/result_rep_0.hdf')
+    print(file.columns)
+    drawMatrix(['dcopy','leak','linkclog','none'], file['actual_label'], file['RandomForest'],
+               'C:/Programming/monitoring/HDcomputing/results_allApps/RF.png')
+
+def drawMatrix(classes, truth, predict, output):
+    from sklearn.metrics import confusion_matrix
+    import itertools
+    from sklearn.metrics import f1_score
+    # Compute confusion matrix
+    cnf_matrix = confusion_matrix(truth, predict, labels=classes)
+    cnf_matrix = np.fliplr(cnf_matrix)
+    np.set_printoptions(precision=2)
+
+    # Plot normalized confusion matrix
+    plt.figure(figsize=(10,7))
+    cnf_matrix = cnf_matrix.astype('float') / cnf_matrix.sum(axis=1)[:, np.newaxis]
+    fs = 20
+    plt.imshow(cnf_matrix, interpolation='nearest', cmap=plt.cm.Blues)
+    f1 = f1_score(truth, predict, average='weighted')
+    plt.title('F1-score: %.3f' % f1, fontsize=fs)
+    plt.colorbar()
+    tick_marks = np.arange(len(classes))
+    rev = classes.copy()
+    rev.reverse()
+    plt.xticks(tick_marks, rev, rotation=45, fontsize=fs)
+    plt.yticks(tick_marks, classes, fontsize=fs)
+
+    fmt = '.3f'
+    thresh = cnf_matrix.max() / 2.
+    for i, j in itertools.product(range(cnf_matrix.shape[0]), range(cnf_matrix.shape[1])):
+        plt.text(j, i, format(cnf_matrix[i, j], fmt), fontsize=fs,
+                 horizontalalignment="center",
+                 color="white" if cnf_matrix[i, j] > thresh else "black")
+
+    plt.tight_layout()
+    y = plt.ylabel('True label', fontsize=fs)
+    x = plt.xlabel('Predicted label', fontsize=fs)
+    plt.savefig(output, bbox_extra_artists=(y,x,), bbox_inches='tight')
 
 #================================
 # main function starts.
