@@ -30,12 +30,12 @@ import matplotlib.pyplot as plt
 plt.switch_backend('agg') # for running in linux batch job.
 
 def main():
-    drawTPDS()
+#    drawTPDS()
     #readResults()
     #apps()
 #    generateFold()
 #    updateFold()
-#    normal()
+    normal()
     #drawFromResult()
 #    scc()
     #gridSearch()
@@ -48,9 +48,9 @@ def main():
     #reshape('C:/Programming/monitoring/data/bt_X/work_search_allbt.csv')
 
 def normal():
-    hd = HD(mode='work', windowSize=5, downSample=9, dimension=10000, trainMethod='closest', seed=0, trainSliding=True, 
-            selectApp=['mg','kripke','lu'], selectIntensity=[100], anomalyTrain='all', metadata=10, withData=False)
-    if hd.withData:
+    hd = HD(mode='work', windowSize=5, downSample=50, dimension=10000, trainMethod='closest', seed=0, trainSliding=True, 
+            selectApp=['mg','kripke','lu'], selectIntensity=[100], anomalyTrain='all', metadata=10, noPreparedData=True)
+    if hd.noPreparedData:
         hd.genMetricVecs()
         hd.normalize()
     #    hd.diagnose()
@@ -78,7 +78,7 @@ def scc():
     
 class HD:
     def __init__(self, env='dell', mode='work', outFile=None, outputEvery=False, windowSize=5, trainMethod='closest', downSample=1, 
-                 dimension=10000, seed=0, fakeMetricNum=8, fakeNoiseScale=0.3, trainSliding=False, withData=True, selectApp='all', 
+                 dimension=10000, seed=0, fakeMetricNum=8, fakeNoiseScale=0.3, trainSliding=False, noPreparedData=True, selectApp='all', 
                  selectIntensity=[20,50,100], anomalyTrain='all', metadata=None):
         print('======================')
         self.env = env
@@ -95,7 +95,7 @@ class HD:
         self.selectIntensity = selectIntensity
         self.anomalyTrain = anomalyTrain
         self.metadata = metadata
-        self.withData = withData
+        self.noPreparedData = noPreparedData
         np.random.seed(self.seed) # not sensitive to this.
         
         if self.env == 'dell':
@@ -121,12 +121,12 @@ class HD:
                     self.metafile = pd.read_csv('C:/Programming/monitoring/run_metadata_%d.csv' % self.metadata)
                 elif self.env == 'scc':
                     self.metafile = pd.read_csv('/projectnb/peaclab-mon/cache/run_metadata_%d.csv' % self.metadata)
-            if withData:
+            if noPreparedData:
                 self.readData()
         elif self.mode == 'check':
             self.metricNum = fakeMetricNum # larger value makes the result better.
             self.fakeNoiseScale = fakeNoiseScale
-            if withData:
+            if noPreparedData:
                 self.genFakeSeries()
         self.resultFile = 'C:/Programming/monitoring/HDcomputing/results/results_window%d_downsample%d_trainWith%s_dim%d_seed%d_trainSliding.csv' % (self.windowSize,
                                                             self.downSample, self.trainMethod, self.dimension, self.seed)
@@ -366,8 +366,8 @@ class HD:
         stop = timeit.default_timer()
         print('encoding time per sliding window: %.3f ms' % ((stop - start) * 1000 / encodeLen))
         print('encoding finished.')
-        with open('%s/encoded.obj' % self.dataFolder, 'bw') as encodedDump:
-            pickle.dump(self.encoded, encodedDump)
+#        with open('%s/encoded.obj' % self.dataFolder, 'bw') as encodedDump:
+#            pickle.dump(self.encoded, encodedDump)
 
     def genHDVec(self, dfTimepoint, metricVecs):
         HDVec = np.zeros(self.dimension)
@@ -422,7 +422,7 @@ class HD:
                         else:
                             thisType = 'none'
                         thisIdx = self.combIdx.index((thisType, (thisRunID, nodeNum)))
-                        if thisFold == ifold:
+                        if thisFold == ifold:# here is adapted to one-shot learning.
                             trainSet.append(thisIdx)
                         else:
                             testSet.append(thisIdx)
@@ -845,7 +845,7 @@ def drawFromResult():
     for ws in [5]:
         for ds in [64]:
             for tm in ['closest','addFilter','HDadd']:
-                hd = HD(mode='work', windowSize=ws, downSample=ds, dimension=10000, trainMethod=tm, seed=0, withData=False)
+                hd = HD(mode='work', windowSize=ws, downSample=ds, dimension=10000, trainMethod=tm, seed=0, noPreparedData=False)
                 if os.path.isfile(hd.resultFile):
                     hd.readResult()
                     hd.confusionMatrix(suffix='')
