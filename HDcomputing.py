@@ -48,7 +48,7 @@ def main():
     #reshape('C:/Programming/monitoring/data/bt_X/work_search_allbt.csv')
 
 def normal():
-    hd = HD(mode='work', windowSize=5, downSample=50, dimension=10000, trainMethod='closest', seed=0, trainSliding=True, 
+    hd = HD(mode='work', windowSize=2, downSample=50, dimension=10000, trainMethod='closest', seed=0, trainSliding=True, 
             selectApp=['mg','kripke','lu'], selectIntensity=[100], anomalyTrain='all', metadata=10, noPreparedData=True)
     if hd.noPreparedData:
         hd.genMetricVecs()
@@ -366,8 +366,8 @@ class HD:
         stop = timeit.default_timer()
         print('encoding time per sliding window: %.3f ms' % ((stop - start) * 1000 / encodeLen))
         print('encoding finished.')
-#        with open('%s/encoded.obj' % self.dataFolder, 'bw') as encodedDump:
-#            pickle.dump(self.encoded, encodedDump)
+        with open('%s/encoded.obj' % self.dataFolder, 'bw') as encodedDump:
+            pickle.dump(self.encoded, encodedDump)
 
     def genHDVec(self, dfTimepoint, metricVecs):
         HDVec = np.zeros(self.dimension)
