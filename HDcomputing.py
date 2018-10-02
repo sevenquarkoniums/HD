@@ -35,9 +35,9 @@ def main():
     #apps()
 #    generateFold()
 #    updateFold()
-#    normal()
+    normal()
     #drawFromResult()
-    scc()
+#    scc()
     #gridSearch()
     #windowSize()
     #dimension()
@@ -518,16 +518,15 @@ class HD:
                     self.predict.append(thisPredict)
     
             stop = timeit.default_timer()
-            if fold == 0:
-                print('f1 for this fold: %.3f' % (f1_score(self.truth, self.predict, average='weighted')))
-                correct, incorrect = 0, 0
-                for ijtruth, itruth in enumerate(self.truth):
-                    if itruth == 'linkclog':
-                        if self.predict[ijtruth] == 'linkclog':
-                            correct += 1
-                        else:
-                            incorrect += 1
-                print('linkclog accuracy this fold: %.3f' % (correct/(correct + incorrect)))
+            print('f1 for this fold: %.3f' % (f1_score(self.truth, self.predict, average='weighted')))
+            correct, incorrect = 0, 0
+            for ijtruth, itruth in enumerate(self.truth):
+                if itruth == 'linkclog':
+                    if self.predict[ijtruth] == 'linkclog':
+                        correct += 1
+                    else:
+                        incorrect += 1
+            print('linkclog accuracy this fold: %.3f' % (correct/(correct + incorrect)))
             print('testing time per sliding window: %.3f us' % ((stop - start) * 1000000 / testLength))
             fold += 1
             
