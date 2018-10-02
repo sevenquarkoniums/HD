@@ -35,9 +35,9 @@ def main():
     #apps()
 #    generateFold()
 #    updateFold()
-    normal()
+#    normal()
     #drawFromResult()
-#    scc()
+    scc()
     #gridSearch()
     #windowSize()
     #dimension()
@@ -49,7 +49,7 @@ def main():
 
 def normal():
     hd = HD(mode='work', windowSize=2, downSample=50, dimension=10000, trainMethod='closest', seed=0, trainSliding=True, 
-            selectApp=['mg','kripke','lu'], selectIntensity=[100], anomalyTrain='all', metadata=10, noPreparedData=True)
+            selectApp=['mg','lu','kripke'], selectIntensity=[100], anomalyTrain='all', metadata=None, noPreparedData=True)#['mg','kripke','lu']
     if hd.noPreparedData:
         hd.genMetricVecs()
         hd.normalize()
@@ -67,8 +67,8 @@ def normal():
 def scc():
     import sys
     hd = HD(env='scc', mode='work', outputEvery=True, trainSliding=True, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), 
-                dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp='all', 
-                selectIntensity=[100], metadata=11)
+                dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp=int(sys.argv[6]), 
+                selectIntensity=[100], metadata=None)
     hd.genMetricVecs()
     hd.normalize()
     hd.slidingWindow()
@@ -518,6 +518,16 @@ class HD:
                     self.predict.append(thisPredict)
     
             stop = timeit.default_timer()
+            if fold == 0:
+                print('f1 for this fold: %.3f' % (f1_score(self.truth, self.predict, average='weighted')))
+                correct, incorrect = 0, 0
+                for ijtruth, itruth in enumerate(self.truth):
+                    if itruth == 'linkclog':
+                        if self.predict[ijtruth] == 'linkclog':
+                            correct += 1
+                        else:
+                            incorrect += 1
+                print('linkclog accuracy this fold: %.3f' % (correct/(correct + incorrect)))
             print('testing time per sliding window: %.3f us' % ((stop - start) * 1000000 / testLength))
             fold += 1
             
