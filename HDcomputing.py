@@ -35,9 +35,9 @@ def main():
     #apps()
 #    generateFold()
 #    updateFold()
-    normal()
+    #normal()
     #drawFromResult()
-#    scc()
+    scc()
     #gridSearch()
     #windowSize()
     #dimension()
@@ -114,7 +114,7 @@ class HD:
                     (self.windowSize, self.dimension, self.seed, self.downSample, self.trainMethod))
         if self.mode == 'work':
             self.marginCut = 60 # TPDS is using 30.
-            self.types = ['dcopy','leak','linkclog','none']#,'dial','memeater' # this order will show in the matrix.
+            self.types = ['dcopy','leak','linkclog','dial','memeater','none']# # this order will show in the matrix.
             print(self.types)
             if self.metadata != None:
                 if self.env == 'dell':
@@ -128,6 +128,7 @@ class HD:
             self.fakeNoiseScale = fakeNoiseScale
             if noPreparedData:
                 self.genFakeSeries()
+        # the following file is only for no-computing-drawing.
         self.resultFile = 'C:/Programming/monitoring/HDcomputing/results/results_window%d_downsample%d_trainWith%s_dim%d_seed%d_trainSliding.csv' % (self.windowSize,
                                                             self.downSample, self.trainMethod, self.dimension, self.seed)
 
@@ -366,8 +367,8 @@ class HD:
         stop = timeit.default_timer()
         print('encoding time per sliding window: %.3f ms' % ((stop - start) * 1000 / encodeLen))
         print('encoding finished.')
-        with open('%s/encoded.obj' % self.dataFolder, 'bw') as encodedDump:
-            pickle.dump(self.encoded, encodedDump)
+        #with open('%s/encoded.obj' % self.dataFolder, 'bw') as encodedDump:
+        #    pickle.dump(self.encoded, encodedDump)
 
     def genHDVec(self, dfTimepoint, metricVecs):
         HDVec = np.zeros(self.dimension)
