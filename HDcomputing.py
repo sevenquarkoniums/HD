@@ -49,10 +49,10 @@ def main():
     #reshape('C:/Programming/monitoring/data/bt_X/work_search_allbt.csv')
 
 def normal():
-    hd = HD(env='dell', mode='work', outputEvery=False, trainSliding=False, windowSize=5, downSample=9, 
+    hd = HD(env='dell', mode='work', outputEvery=False, trainSliding=False, windowSize=1, downSample=100, 
             dimension=10000, trainMethod='closest', seed=0, selectApp='all', 
             selectIntensity=[100], metadata=None, anomalyTrain='all', noPreparedData=True,
-            storeEncoding=False, simVecThres=0.5, onlyOneFold=True)#['mg','kripke','lu']
+            storeEncoding=False, simVecThres=0.5, onlyOneFold=True, invertTrainTest=True)#['mg','kripke','lu']
     if hd.noPreparedData:
         hd.genMetricVecs()
         hd.normalize()
@@ -71,7 +71,7 @@ def scc():
     import sys
     hd = HD(env='scc', mode='work', outputEvery=False, trainSliding=False, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), 
                 dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp=sys.argv[6], 
-                selectIntensity=[100], metadata=10, anomalyTrain='all', simVecThres=0.5, onlyOneFold=True)
+                selectIntensity=[100], metadata=None, anomalyTrain='all', simVecThres=0.5, onlyOneFold=True, invertTrainTest=True)
     hd.genMetricVecs()
     hd.normalize()
     hd.slidingWindow()
@@ -82,7 +82,8 @@ def scc():
 class HD:
     def __init__(self, env='dell', mode='work', outFile=None, outputEvery=False, windowSize=5, trainMethod='closest', downSample=1, 
                  dimension=10000, seed=0, fakeMetricNum=8, fakeNoiseScale=0.3, trainSliding=False, noPreparedData=True, selectApp='all', 
-                 selectIntensity=[20,50,100], anomalyTrain='all', metadata=None, storeEncoding=False, simVecThres=0.01, onlyOneFold=False):
+                 selectIntensity=[20,50,100], anomalyTrain='all', metadata=None, storeEncoding=False, simVecThres=0.01, onlyOneFold=False,
+                 invertTrainTest=False):
         print('======================')
         self.env = env
         self.mode = mode# work, check.
@@ -102,6 +103,7 @@ class HD:
         self.storeEncoding = storeEncoding
         self.simVecThres = simVecThres
         self.onlyOneFold = onlyOneFold
+        self.invertTrainTest = invertTrainTest
         np.random.seed(self.seed) # not sensitive to this.
         
         if self.env == 'dell':
@@ -440,6 +442,10 @@ class HD:
         self.truth, self.predict = [], []
         fold = 0
         for trainIdx, self.testIdx in trainTestSets:
+            if self.invertTrainTest:
+                temp = trainIdx
+                trainIdx = self.testIdx
+                self.testIdx = temp
             print('fold: %d..' % fold)
             if self.anomalyTrain == 'all' or self.metadata != None:
                 selectedTrainIdx = trainIdx
@@ -615,8 +621,8 @@ class HD:
             suffix = '_window%d_downsample%d_trainWith%s_dim%d_seed%d_trainSliding%s' % (self.windowSize, self.downSample, self.trainMethod, 
                                                                       self.dimension, self.seed, aboutApp)
         else:
-            suffix = '_window%d_downsample%d_trainWith%s_dim%d_seed%d_%s_meta%s' % (self.windowSize, self.downSample, self.trainMethod, 
-                                                                      self.dimension, self.seed, aboutApp, '' if self.metadata==None else str(self.metadata))
+            suffix = '_window%d_downsample%d_trainWith%s_dim%d_seed%d_%s_%s' % (self.windowSize, self.downSample, self.trainMethod, 
+                                                                      self.dimension, self.seed, aboutApp, 'invert' if self.invertTrainTest else '')
         # Compute confusion matrix
         cnf_matrix = confusion_matrix(self.truth, self.predict, labels=self.types)
         cnf_matrix = np.fliplr(cnf_matrix)

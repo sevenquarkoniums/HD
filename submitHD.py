@@ -14,7 +14,7 @@ for windowSize in [5]:
                             mem = 64
                         elif downSample > 5:
                             mem = 30
-                        name = 'HD_window%d_downsample%d_trainWith%s_dim%d_seed%d_%s_meta10' % (windowSize, downSample, trainMethod, dimension, seed, selectApp)
+                        name = 'HD_window%d_downsample%d_trainWith%s_dim%d_seed%d_%s_invert' % (windowSize, downSample, trainMethod, dimension, seed, selectApp)
                         shfile = '/projectnb/peaclab-mon/yijia/HDcomputing/sh/%s.sh' % (name) 
                         outpath = '/projectnb/peaclab-mon/yijia/HDcomputing/out/%s.out' % (name)
                         fsh = open(shfile, 'w')
