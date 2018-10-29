@@ -8,11 +8,11 @@ run by:
 
 ### TODO ###
 get nonConstantMetrics from all data.
-improve addFilter method.
 
 ### warning ###
 1 need to use a fixed random seed.
 2 be careful with printing without newline.
+3 only using input X.
 
 """
 #=========================
@@ -24,6 +24,7 @@ now = datetime.datetime.now()
 
 import pandas as pd
 import numpy as np
+import math
 import os.path
 import timeit
 import matplotlib.pyplot as plt
@@ -35,7 +36,7 @@ def main():
     #apps()
 #    generateFold()
 #    updateFold()
-    #normal()
+#    normal()
     #drawFromResult()
     scc()
     #gridSearch()
@@ -48,8 +49,10 @@ def main():
     #reshape('C:/Programming/monitoring/data/bt_X/work_search_allbt.csv')
 
 def normal():
-    hd = HD(mode='work', windowSize=2, downSample=50, dimension=10000, trainMethod='closest', seed=0, trainSliding=True, 
-            selectApp=['mg','lu','kripke'], selectIntensity=[100], anomalyTrain='all', metadata=None, noPreparedData=True)#['mg','kripke','lu']
+    hd = HD(env='dell', mode='work', outputEvery=False, trainSliding=False, windowSize=5, downSample=9, 
+            dimension=10000, trainMethod='closest', seed=0, selectApp='all', 
+            selectIntensity=[100], metadata=None, anomalyTrain='all', noPreparedData=True,
+            storeEncoding=False, simVecThres=0.5)#['mg','kripke','lu']
     if hd.noPreparedData:
         hd.genMetricVecs()
         hd.normalize()
@@ -66,9 +69,9 @@ def normal():
 
 def scc():
     import sys
-    hd = HD(env='scc', mode='work', outputEvery=True, trainSliding=True, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), 
+    hd = HD(env='scc', mode='work', outputEvery=False, trainSliding=False, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), 
                 dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp=sys.argv[6], 
-                selectIntensity=[100], metadata=None)
+                selectIntensity=[100], metadata=None, anomalyTrain='all', simVecThres=0.5)
     hd.genMetricVecs()
     hd.normalize()
     hd.slidingWindow()
@@ -79,7 +82,7 @@ def scc():
 class HD:
     def __init__(self, env='dell', mode='work', outFile=None, outputEvery=False, windowSize=5, trainMethod='closest', downSample=1, 
                  dimension=10000, seed=0, fakeMetricNum=8, fakeNoiseScale=0.3, trainSliding=False, noPreparedData=True, selectApp='all', 
-                 selectIntensity=[20,50,100], anomalyTrain='all', metadata=None):
+                 selectIntensity=[20,50,100], anomalyTrain='all', metadata=None, storeEncoding=False, simVecThres=0.01):
         print('======================')
         self.env = env
         self.mode = mode# work, check.
@@ -96,6 +99,8 @@ class HD:
         self.anomalyTrain = anomalyTrain
         self.metadata = metadata
         self.noPreparedData = noPreparedData
+        self.storeEncoding = storeEncoding
+        self.simVecThres = simVecThres
         np.random.seed(self.seed) # not sensitive to this.
         
         if self.env == 'dell':
@@ -212,7 +217,6 @@ class HD:
         '''
         May have indexing problem because of the index (runID, nodeNum).
         '''
-        import math
         self.metrics = list(range(self.metricNum))
         self.types = ['a','b','c','d','e','f']
         fakeLength = 200
@@ -367,8 +371,10 @@ class HD:
         stop = timeit.default_timer()
         print('encoding time per sliding window: %.3f ms' % ((stop - start) * 1000 / encodeLen))
         print('encoding finished.')
-        #with open('%s/encoded.obj' % self.dataFolder, 'bw') as encodedDump:
-        #    pickle.dump(self.encoded, encodedDump)
+        if self.storeEncoding:
+            print('Storing encoding..')
+            with open('%s/encoded.obj' % self.dataFolder, 'bw') as encodedDump:
+                pickle.dump(self.encoded, encodedDump)
 
     def genHDVec(self, dfTimepoint, metricVecs):
         HDVec = np.zeros(self.dimension)
@@ -399,6 +405,7 @@ class HD:
     def trainTest(self):
         from sklearn.model_selection import StratifiedKFold
         from sklearn.metrics import f1_score, accuracy_score
+        from sklearn.cluster import DBSCAN
         print('start training..')
         print('train method: %s' % self.trainMethod)
         self.combIdx = []
@@ -407,7 +414,7 @@ class HD:
             for ifile in self.encoded[itype].keys():
                 self.combIdx.append((itype, ifile))
                 labels.append(itype)
-        if self.metadata == None:
+        if self.metadata == None:# This is regular cross-validation. Not one-shot version.
             skf = StratifiedKFold(n_splits=self.numFold)
             trainTestSets = skf.split(self.combIdx, labels)
         else:
@@ -455,8 +462,9 @@ class HD:
             for itype in self.types:
                 if self.trainMethod in ['HDadd','addFilter']:
                     self.represent[itype] = []
-                elif self.trainMethod == 'closest':
+                elif self.trainMethod in ['closest','HDaddSimilar','DBSCAN']:
                     self.represent[itype] = []
+            sampleNum = 0
             lenTrain = len(selectedTrainIdx)
             for iitrainIdx, itrainIdx in enumerate(selectedTrainIdx):
                 
@@ -477,16 +485,40 @@ class HD:
                             break
                         if self.cos(self.represent[itype], self.encoded[itype][ifile][iwindow]) < 0.05:# only add unsimilar vectors.
                             self.represent[itype] = self.add(self.represent[itype], self.encoded[itype][ifile][iwindow])
-                    elif self.trainMethod == 'closest':
+                    elif self.trainMethod in ['closest','DBSCAN']:
                         self.represent[itype].append(self.encoded[itype][ifile][iwindow])
                     elif self.trainMethod == 'addFilter':
                         if len(self.represent[itype]) != self.dimension:# for the first one.
                             self.represent[itype] = self.encoded[itype][ifile][iwindow]
                             break
                         self.represent[itype] = np.add(self.represent[itype], self.encoded[itype][ifile][iwindow])
+                    elif self.trainMethod == 'HDaddSimilar':
+                        sampleNum += 1
+                        noSimilar = True
+                        for ivector, vector in enumerate(self.represent[itype]):
+                            if self.cos(vector, self.encoded[itype][ifile][iwindow]) < self.simVecThres:
+                                noSimilar = False
+                                self.represent[itype][ivector] = self.add(vector, self.encoded[itype][ifile][iwindow])
+                                break
+                                #self.represent[itype] = self.add(self.represent[itype], self.encoded[itype][ifile][iwindow])
+                        if noSimilar:
+                            self.represent[itype].append(self.encoded[itype][ifile][iwindow])
                 if self.trainMethod == 'addFilter':
                     self.represent[itype][ self.represent[itype] >= 0 ] = 1
                     self.represent[itype][ self.represent[itype] < 0 ] = -1
+            if self.trainMethod == 'DBSCAN':
+                print('doing DBSCAN..')
+                for itype in self.types:
+                    clustering = DBSCAN(eps=self.dimension/100, metric='manhattan', n_jobs=-1).fit(self.represent[itype])
+                    DBSCANclass = len(set(clustering.labels_))-1
+                    print('DBSCAN classes (excluding -1): %d' % (DBSCANclass))
+                    print(clustering.labels_)
+                    for ilabel in range(DBSCANclass):
+                        print(len(self.represent[itype][ clustering.labels_ == ilabel ]))
+                    # not finished.
+            if self.trainMethod == 'HDaddSimilar':
+                print('At threshold %.3f, collected representative vectors ratio: %.3f' % 
+                        (self.simVecThres, sum([len(self.represent[x]) for x in self.types])/sampleNum))
                     
             testLength = 0
             start = timeit.default_timer()
@@ -507,7 +539,7 @@ class HD:
                     for testType in self.types:
                         if self.trainMethod in ['HDadd', 'addFilter']:
                             product[testType] = np.dot(self.encoded[itype][ifile][iwindow], self.represent[testType])
-                        elif self.trainMethod == 'closest':
+                        elif self.trainMethod in ['closest','HDaddSimilar','DBSCAN']:
                             thisTypeProducts = []
                             for itrain in self.represent[testType]:
                                 thisTypeProducts.append(np.dot(self.encoded[itype][ifile][iwindow], itrain))
@@ -573,15 +605,15 @@ class HD:
     def confusionMatrix(self, suffix=''):
         from sklearn.metrics import confusion_matrix
         if self.selectApp != 'all':
-            aboutApp = '_' + '-'.join(self.selectApp)
+            aboutApp = '-'.join(self.selectApp)
         else:
-            aboutApp = ''
+            aboutApp = 'allApp'
         if self.trainSliding:
             suffix = '_window%d_downsample%d_trainWith%s_dim%d_seed%d_trainSliding%s' % (self.windowSize, self.downSample, self.trainMethod, 
                                                                       self.dimension, self.seed, aboutApp)
         else:
-            suffix = '_window%d_downsample%d_trainWith%s_dim%d_seed%d_anomalyTrain%s%s' % (self.windowSize, self.downSample, self.trainMethod, 
-                                                                      self.dimension, self.seed, str(self.anomalyTrain), aboutApp)
+            suffix = '_window%d_downsample%d_trainWith%s_dim%d_seed%d_%s' % (self.windowSize, self.downSample, self.trainMethod, 
+                                                                      self.dimension, self.seed, aboutApp)
         # Compute confusion matrix
         cnf_matrix = confusion_matrix(self.truth, self.predict, labels=self.types)
         cnf_matrix = np.fliplr(cnf_matrix)
@@ -618,7 +650,7 @@ class HD:
         fmt = '.3f' if normalize else 'd'
         thresh = cm.max() / 2.
         for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
-            plt.text(j, i, format(cm[i, j], fmt), fontsize=fs,
+            plt.text(j, i, format(cm[i, j], fmt), fontsize=fs-4,
                      horizontalalignment="center",
                      color="white" if cm[i, j] > thresh else "black")
     
@@ -876,10 +908,10 @@ def gridSearch():
             hd.test()
 
 def drawTPDS():
-    file = pd.read_hdf('C:/Programming/monitoring/HDcomputing/results_allApps/result_rep_0.hdf')
+    file = pd.read_hdf('C:/Programming/monitoring/HDcomputing/tpds_trainbtcg_entire.hdf')
     print(file.columns)
-    drawMatrix(['dcopy','leak','linkclog','none'], file['actual_label'], file['RandomForest'],
-               'C:/Programming/monitoring/HDcomputing/results_allApps/RF.png')
+    drawMatrix(['dcopy','leak','linkclog','memeater','dial','none'], file['actual_label'], file['RandomForest'],
+               'C:/Programming/monitoring/HDcomputing/tpds_trainbtcg_entire.png')
 
 def drawMatrix(classes, truth, predict, output):
     from sklearn.metrics import confusion_matrix
@@ -907,7 +939,7 @@ def drawMatrix(classes, truth, predict, output):
     fmt = '.3f'
     thresh = cnf_matrix.max() / 2.
     for i, j in itertools.product(range(cnf_matrix.shape[0]), range(cnf_matrix.shape[1])):
-        plt.text(j, i, format(cnf_matrix[i, j], fmt), fontsize=fs,
+        plt.text(j, i, format(cnf_matrix[i, j], fmt), fontsize=fs-4,
                  horizontalalignment="center",
                  color="white" if cnf_matrix[i, j] > thresh else "black")
 

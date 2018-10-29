@@ -88,7 +88,7 @@ plt.rc('ytick', labelsize=fs)
 fig, ax = plt.subplots(figsize=(10,8))
 for iapp, app in enumerate(apps):
     xs = [0.2+iapp+0.6/len(features[app]['none'])*inode for inode in range(len(features[app]['none']))]
-    ax.plot(xs, features[app]['none'], '+k')
+    ax.plot(xs, features[app]['none'], 'xk')
     labels = ['xr','xb','xy','xg','xc']
     for idx, itype in enumerate(['dcopy','leak','linkclog','dial','memeater']):
         xs = [0.2+iapp+0.6/len(features[app][itype])*inode for inode in range(len(features[app][itype]))]
