@@ -562,6 +562,8 @@ class HD:
             print('linkclog accuracy this fold: %.3f' % (correct/(correct + incorrect)))
             print('testing time per sliding window: %.3f us' % ((stop - start) * 1000000 / testLength))
             fold += 1
+            if self.onlyOneFold:
+                break
             
         f1 = f1_score(self.truth, self.predict, average='weighted')
         self.f1 = f1
