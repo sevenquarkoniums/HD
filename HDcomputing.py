@@ -52,7 +52,7 @@ def normal():
     hd = HD(env='dell', mode='work', outputEvery=False, trainSliding=False, windowSize=5, downSample=9, 
             dimension=10000, trainMethod='closest', seed=0, selectApp='all', 
             selectIntensity=[100], metadata=None, anomalyTrain='all', noPreparedData=True,
-            storeEncoding=False, simVecThres=0.5)#['mg','kripke','lu']
+            storeEncoding=False, simVecThres=0.5, onlyOneFold=True)#['mg','kripke','lu']
     if hd.noPreparedData:
         hd.genMetricVecs()
         hd.normalize()
@@ -71,7 +71,7 @@ def scc():
     import sys
     hd = HD(env='scc', mode='work', outputEvery=False, trainSliding=False, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), 
                 dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp=sys.argv[6], 
-                selectIntensity=[100], metadata=None, anomalyTrain='all', simVecThres=0.5)
+                selectIntensity=[100], metadata=None, anomalyTrain='all', simVecThres=0.5, onlyOneFold=True)
     hd.genMetricVecs()
     hd.normalize()
     hd.slidingWindow()
@@ -82,7 +82,7 @@ def scc():
 class HD:
     def __init__(self, env='dell', mode='work', outFile=None, outputEvery=False, windowSize=5, trainMethod='closest', downSample=1, 
                  dimension=10000, seed=0, fakeMetricNum=8, fakeNoiseScale=0.3, trainSliding=False, noPreparedData=True, selectApp='all', 
-                 selectIntensity=[20,50,100], anomalyTrain='all', metadata=None, storeEncoding=False, simVecThres=0.01):
+                 selectIntensity=[20,50,100], anomalyTrain='all', metadata=None, storeEncoding=False, simVecThres=0.01, onlyOneFold=False):
         print('======================')
         self.env = env
         self.mode = mode# work, check.
@@ -101,6 +101,7 @@ class HD:
         self.noPreparedData = noPreparedData
         self.storeEncoding = storeEncoding
         self.simVecThres = simVecThres
+        self.onlyOneFold = onlyOneFold
         np.random.seed(self.seed) # not sensitive to this.
         
         if self.env == 'dell':
