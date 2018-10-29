@@ -51,8 +51,8 @@ def main():
 def normal():
     hd = HD(env='dell', mode='work', outputEvery=False, trainSliding=False, windowSize=1, downSample=100, 
             dimension=10000, trainMethod='closest', seed=0, selectApp='all', 
-            selectIntensity=[100], metadata=None, anomalyTrain='all', noPreparedData=True,
-            storeEncoding=False, simVecThres=0.5, onlyOneFold=True, invertTrainTest=True)#['mg','kripke','lu']
+            selectIntensity=[100], metadata=None, anomalyTrain='bt', noPreparedData=True,
+            storeEncoding=False, simVecThres=0.5, onlyOneFold=False, invertTrainTest=False)#['mg','kripke','lu']
     if hd.noPreparedData:
         hd.genMetricVecs()
         hd.normalize()
@@ -70,8 +70,9 @@ def normal():
 def scc():
     import sys
     hd = HD(env='scc', mode='work', outputEvery=False, trainSliding=False, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), 
-                dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp=sys.argv[6], 
-                selectIntensity=[100], metadata=None, anomalyTrain='all', simVecThres=0.5, onlyOneFold=True, invertTrainTest=True)
+                dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp='all', 
+                selectIntensity=[100], metadata=None, anomalyTrain=sys.argv[6], 
+                simVecThres=0.5, onlyOneFold=False, invertTrainTest=False)
     hd.genMetricVecs()
     hd.normalize()
     hd.slidingWindow()
@@ -163,24 +164,26 @@ class HD:
             # }
             self.length[itype], self.start[itype] = {}, {}
                         
-            files = []
+            files = [] # [ ('%s/%s_X/%s_%d/%s', 'bt'), ...]
             for intensity in self.selectIntensity:
                 if itype != 'none':
                     for iapp in self.apps:
                         temp = getfiles('%s/%s_X/%s_%d' % (self.dataFolder, iapp, itype, intensity))
-                        files += [x for x in temp if int(x[-5])==1]# only anomalous.
+                        files += [(x, iapp) for x in temp if int(x[-5])==1]# only anomalous.
                 else:
                     for iapp in self.apps:
                         for jtype in self.types:# need to go into jtype folders to read none-type files.
                             if self.metadata == None:
                                 temp = getfiles('%s/%s_X/%s_%d' % (self.dataFolder, iapp, jtype, intensity))
                                 if jtype != 'none':
-                                    temp = [x for x in temp if int(x[-5])!=1]# only healthy.
+                                    temp = [(x, iapp) for x in temp if int(x[-5])!=1]# only healthy.
+                                else:
+                                    temp = [(x, iapp) for x in temp]
                                 files += temp
                             else:
                                 if jtype != 'none':
                                     temp = getfiles('%s/%s_X/%s_%d' % (self.dataFolder, iapp, jtype, intensity))
-                                    temp = [x for x in temp if int(x[-5])!=1]# only healthy.
+                                    temp = [(x, iapp) for x in temp if int(x[-5])!=1]# only healthy.
                                     files += temp
                                 elif jtype == 'none':
                                     for jintensity in [20,50,100]:# need to go to all intensities because of the discrepency between dell and scc files.
@@ -191,24 +194,25 @@ class HD:
                                             elif self.env == 'scc':
                                                 runID = ifile.split('/')[-1].split('_')[0]
                                             if runID in list(self.metafile['runID']):
-                                                files.append(ifile)
+                                                files.append((ifile, iapp))
             fileIdx = 0
             for ifile in files:
+                appName = ifile[1]
                 if self.env == 'dell':
-                    runID = ifile.split('\\')[-1].split('_')[0]
+                    runID = ifile[0].split('\\')[-1].split('_')[0]
                 elif self.env == 'scc':
-                    runID = ifile.split('/')[-1].split('_')[0]
-                node = int(ifile[-5])
-                df = pd.read_csv(ifile).iloc[self.marginCut:-self.marginCut]
+                    runID = ifile[0].split('/')[-1].split('_')[0]
+                node = int(ifile[0][-5])
+                df = pd.read_csv(ifile[0]).iloc[self.marginCut:-self.marginCut]
                 if metricFileExist:
                     df = df[['#Time']+self.metrics]
                 if self.downSample > 1:
                     dfAvg = df.rolling(window=self.downSample).mean()
                     df = dfAvg[(self.downSample-1)::self.downSample]
-                self.length[itype][(runID, node)] = len(df)
-                self.start[itype][(runID, node)] = cumStart
+                self.length[itype][(runID, node, appName)] = len(df)
+                self.start[itype][(runID, node, appName)] = cumStart
                 cumStart += len(df)
-                self.rawData[itype][(runID, node)] = df
+                self.rawData[itype][(runID, node, appName)] = df
                 fileIdx += 1
         if not metricFileExist:
             self.metrics = list(self.rawData['none'][list(self.rawData['none'].keys())[0]].columns)
@@ -218,7 +222,7 @@ class HD:
 
     def genFakeSeries(self):
         '''
-        May have indexing problem because of the index (runID, nodeNum).
+        have indexing problem because of the index (runID, nodeNum, appName).
         '''
         self.metrics = list(range(self.metricNum))
         self.types = ['a','b','c','d','e','f']
@@ -412,58 +416,59 @@ class HD:
         print('start training..')
         print('train method: %s' % self.trainMethod)
         self.combIdx = []
+        # self.combIdx = [ ('dcopy', ('59e5059657f3f44ead641ab5', 0)),
+        #                 ...
+        #                 ]
+        # trainTestSets = [ ([1,2,3,4], [0]), ...
+        #                  ] (indices for self.combIdx)
         labels = []
         for itype in self.types:
             for ifile in self.encoded[itype].keys():
                 self.combIdx.append((itype, ifile))
                 labels.append(itype)
-        if self.metadata == None:# This is regular cross-validation. Not one-shot version.
+        if self.metadata == None and self.anomalyTrain == 'all':# This is regular cross-validation. Not one-shot version.
             skf = StratifiedKFold(n_splits=self.numFold)
             trainTestSets = skf.split(self.combIdx, labels)
-        else:
+        elif self.metadata != None and self.anomalyTrain == 'all': # use metadata.
             trainTestSets = []
             for ifold in range(5):
                 trainSet, testSet = [], []
                 for idx, row in self.metafile.iterrows():
                     thisFold = row['fold_0']
                     thisRunID = row['runID']
+                    thisRunApp = row['app']
                     for nodeNum in range(4):
                         if nodeNum == 1:
                             thisType = row['anomaly']
                         else:
                             thisType = 'none'
-                        thisIdx = self.combIdx.index((thisType, (thisRunID, nodeNum)))
+                        thisIdx = self.combIdx.index((thisType, (thisRunID, nodeNum, thisRunApp)))
                         if thisFold == ifold:# here is adapted to one-shot learning.
                             trainSet.append(thisIdx)
                         else:
                             testSet.append(thisIdx)
                 trainTestSets.append((trainSet, testSet))
                 print('trainSetLen, testSetLen: %d, %d' % (len(trainSet), len(testSet)))
+        else:# use only app from self.anomalyTrain.
+            print('Train only with selected app.')
+            trainTestSets = []
+            trainSet = []
+            testSet = []
+            for iicombIdx, icombIdx in enumerate(self.combIdx):
+                if icombIdx[1][2] == self.anomalyTrain:
+                    trainSet.append(iicombIdx)
+                else:
+                    testSet.append(iicombIdx)
+            trainTestSets.append((trainSet, testSet))
         self.truth, self.predict = [], []
         fold = 0
         for trainIdx, self.testIdx in trainTestSets:
-            if self.invertTrainTest:
+            if self.invertTrainTest:# for training-set-reduced case.
                 temp = trainIdx
                 trainIdx = self.testIdx
                 self.testIdx = temp
             print('fold: %d..' % fold)
-            if self.anomalyTrain == 'all' or self.metadata != None:
-                selectedTrainIdx = trainIdx
-            else:# reduce the training files here.
-                selectedTrainIdx = []
-                typeTrainIdx = {}
-                for itype in self.types:
-                    typeTrainIdx[itype] = []
-                for itrainIdx in trainIdx:
-                    itype, ifile = self.combIdx[itrainIdx]
-                    typeTrainIdx[itype].append(itrainIdx)
-                if fold == 0:
-                    print('Num. of training dcopy files in each fold: %d' % len(typeTrainIdx['dcopy']))
-#                selectedTrainIdx += typeTrainIdx['none']
-                selectedTrainIdx += list(np.random.choice( typeTrainIdx['none'], int(self.anomalyTrain/12 * len(typeTrainIdx['none'])) ))
-                for itype in self.types:
-                    if itype != 'none':
-                        selectedTrainIdx += list(np.random.choice(typeTrainIdx[itype], self.anomalyTrain))
+            selectedTrainIdx = trainIdx
             print('training..', end='')
             self.represent = {}
             for itype in self.types:
@@ -570,6 +575,7 @@ class HD:
             print('testing time per sliding window: %.3f us' % ((stop - start) * 1000000 / testLength))
             fold += 1
             if self.onlyOneFold:
+                print('Only used the first fold.')
                 break
             
         f1 = f1_score(self.truth, self.predict, average='weighted')

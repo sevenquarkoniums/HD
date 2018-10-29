@@ -7,20 +7,20 @@ for windowSize in [5]:
         for trainMethod in ['closest']:#,'addFilter','HDadd']:
             for dimension in [10000]:
                 for seed in [0]:
-                    for selectApp in ['all']:#['all','bt','cg','CoMD','ft','kripke','lu','mg','miniAMR','miniGhost','miniMD','sp']:
+                    for anomalyTrain in ['bt','cg','CoMD','ft','kripke','lu','mg','miniAMR','miniGhost','miniMD','sp']:
                         if downSample == 1:
                             mem = 128
                         elif downSample in [5]:
                             mem = 64
                         elif downSample > 5:
                             mem = 30
-                        name = 'HD_window%d_downsample%d_trainWith%s_dim%d_seed%d_%s_invert' % (windowSize, downSample, trainMethod, dimension, seed, selectApp)
+                        name = 'HD_window%d_downsample%d_trainWith%s_dim%d_seed%d_%s_trainOne' % (windowSize, downSample, trainMethod, dimension, seed, anomalyTrain)
                         shfile = '/projectnb/peaclab-mon/yijia/HDcomputing/sh/%s.sh' % (name) 
                         outpath = '/projectnb/peaclab-mon/yijia/HDcomputing/out/%s.out' % (name)
                         fsh = open(shfile, 'w')
                         line = '#!/bin/bash -l\n'
                         line += 'module load anaconda3\n'
-                        line += './HDcomputing.py %d %d %s %d %d %s' % (windowSize, downSample, trainMethod, dimension, seed, selectApp)
+                        line += './HDcomputing.py %d %d %s %d %d %s' % (windowSize, downSample, trainMethod, dimension, seed, anomalyTrain)
                         fsh.write(line)
                         fsh.close()
 
