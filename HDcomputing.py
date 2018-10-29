@@ -52,7 +52,7 @@ def normal():
     hd = HD(env='dell', mode='work', outputEvery=False, trainSliding=False, windowSize=1, downSample=100, 
             dimension=10000, trainMethod='closest', seed=0, selectApp='all', 
             selectIntensity=[100], metadata=None, anomalyTrain='bt', noPreparedData=True,
-            storeEncoding=False, simVecThres=0.5, onlyOneFold=False, invertTrainTest=False)#['mg','kripke','lu']
+            storeEncoding=False, simVecThres=0.5, onlyOneFold=False, invertTrainTest=False, oneShot=True)#['mg','kripke','lu']
     if hd.noPreparedData:
         hd.genMetricVecs()
         hd.normalize()
@@ -72,7 +72,7 @@ def scc():
     hd = HD(env='scc', mode='work', outputEvery=False, trainSliding=False, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), 
                 dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp='all', 
                 selectIntensity=[100], metadata=None, anomalyTrain=sys.argv[6], 
-                simVecThres=0.5, onlyOneFold=False, invertTrainTest=False)
+                simVecThres=0.5, onlyOneFold=False, invertTrainTest=False, oneShot=True)
     hd.genMetricVecs()
     hd.normalize()
     hd.slidingWindow()
@@ -84,7 +84,7 @@ class HD:
     def __init__(self, env='dell', mode='work', outFile=None, outputEvery=False, windowSize=5, trainMethod='closest', downSample=1, 
                  dimension=10000, seed=0, fakeMetricNum=8, fakeNoiseScale=0.3, trainSliding=False, noPreparedData=True, selectApp='all', 
                  selectIntensity=[20,50,100], anomalyTrain='all', metadata=None, storeEncoding=False, simVecThres=0.01, onlyOneFold=False,
-                 invertTrainTest=False):
+                 invertTrainTest=False, oneShot=False):
         print('======================')
         self.env = env
         self.mode = mode# work, check.
@@ -105,6 +105,7 @@ class HD:
         self.simVecThres = simVecThres
         self.onlyOneFold = onlyOneFold
         self.invertTrainTest = invertTrainTest
+        self.oneShot = oneShot
         np.random.seed(self.seed) # not sensitive to this.
         
         if self.env == 'dell':
@@ -416,7 +417,7 @@ class HD:
         print('start training..')
         print('train method: %s' % self.trainMethod)
         self.combIdx = []
-        # self.combIdx = [ ('dcopy', ('59e5059657f3f44ead641ab5', 0)),
+        # self.combIdx = [ ('dcopy', ('59e5059657f3f44ead641ab5', 0, 'bt')),
         #                 ...
         #                 ]
         # trainTestSets = [ ([1,2,3,4], [0]), ...
@@ -454,9 +455,21 @@ class HD:
             trainTestSets = []
             trainSet = []
             testSet = []
+            trainedTypes = []
             for iicombIdx, icombIdx in enumerate(self.combIdx):
                 if icombIdx[1][2] == self.anomalyTrain:
-                    trainSet.append(iicombIdx)
+                    if self.oneShot:# one-shot case, only use 6 nodes.
+                        if icombIdx[0] in [x[0] for x in trainedTypes]:# have seen this type before.
+                            theOne = [x[0] for x in trainedTypes].index(icombIdx[0])
+                            if icombIdx[1] == trainedTypes[theOne][1] and icombIdx[2] == trainedTypes[theOne][2]:# the same node.
+                                trainSet.append(iicombIdx)
+                            else:
+                                continue# don't retrain the same type for different node.
+                        else:# haven't seen this type before.
+                            trainSet.append(iicombIdx)
+                            trainedTypes.append((icombIdx[0], icombIdx[1][0], icombIdx[1][1]))
+                    else:# not one-shot, so using all runs from this app.
+                        trainSet.append(iicombIdx)
                 else:
                     testSet.append(iicombIdx)
             trainTestSets.append((trainSet, testSet))
@@ -628,8 +641,9 @@ class HD:
             suffix = '_window%d_downsample%d_trainWith%s_dim%d_seed%d_trainSliding%s' % (self.windowSize, self.downSample, self.trainMethod, 
                                                                       self.dimension, self.seed, aboutApp)
         else:
-            suffix = '_window%d_downsample%d_trainWith%s_dim%d_seed%d_%s_%s' % (self.windowSize, self.downSample, self.trainMethod, 
-                                                                      self.dimension, self.seed, aboutApp, 'invert' if self.invertTrainTest else '')
+            suffix = '_window%d_downsample%d_trainWith%s_dim%d_seed%d_%s_%s_%s' % (self.windowSize, self.downSample, self.trainMethod, 
+                                                                      self.dimension, self.seed, aboutApp, 'invert' if self.invertTrainTest else '',
+                                                                      'oneShot' if self.oneShot else '')
         # Compute confusion matrix
         cnf_matrix = confusion_matrix(self.truth, self.predict, labels=self.types)
         cnf_matrix = np.fliplr(cnf_matrix)
