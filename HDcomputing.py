@@ -619,10 +619,11 @@ class HD:
 
     def confusionMatrix(self, suffix=''):
         from sklearn.metrics import confusion_matrix
-        if self.selectApp != 'all':
-            aboutApp = '-'.join(self.selectApp)
-        else:
-            aboutApp = 'allApp'
+#        if self.selectApp != 'all':
+#            aboutApp = '-'.join(self.selectApp)
+#        else:
+#            aboutApp = 'allApp'
+        aboutApp = self.anomalyTrain
         if self.trainSliding:
             suffix = '_window%d_downsample%d_trainWith%s_dim%d_seed%d_trainSliding%s' % (self.windowSize, self.downSample, self.trainMethod, 
                                                                       self.dimension, self.seed, aboutApp)
