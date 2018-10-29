@@ -71,7 +71,7 @@ def scc():
     import sys
     hd = HD(env='scc', mode='work', outputEvery=False, trainSliding=False, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), 
                 dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp=sys.argv[6], 
-                selectIntensity=[100], metadata=None, anomalyTrain='all', simVecThres=0.5, onlyOneFold=True)
+                selectIntensity=[100], metadata=10, anomalyTrain='all', simVecThres=0.5, onlyOneFold=True)
     hd.genMetricVecs()
     hd.normalize()
     hd.slidingWindow()
@@ -615,8 +615,8 @@ class HD:
             suffix = '_window%d_downsample%d_trainWith%s_dim%d_seed%d_trainSliding%s' % (self.windowSize, self.downSample, self.trainMethod, 
                                                                       self.dimension, self.seed, aboutApp)
         else:
-            suffix = '_window%d_downsample%d_trainWith%s_dim%d_seed%d_%s' % (self.windowSize, self.downSample, self.trainMethod, 
-                                                                      self.dimension, self.seed, aboutApp)
+            suffix = '_window%d_downsample%d_trainWith%s_dim%d_seed%d_%s_meta%s' % (self.windowSize, self.downSample, self.trainMethod, 
+                                                                      self.dimension, self.seed, aboutApp, '' if self.metadata==None else str(self.metadata))
         # Compute confusion matrix
         cnf_matrix = confusion_matrix(self.truth, self.predict, labels=self.types)
         cnf_matrix = np.fliplr(cnf_matrix)
