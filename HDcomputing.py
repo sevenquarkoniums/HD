@@ -13,6 +13,7 @@ get nonConstantMetrics from all data.
 1 need to use a fixed random seed.
 2 be careful with printing without newline.
 3 only using input X.
+4 need to change outputFile name.
 
 """
 #=========================
@@ -69,16 +70,16 @@ def normal():
 
 def scc():
     import sys
-    hd = HD(env='scc', mode='work', outputEvery=False, trainSliding=False, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), 
+    hd = HD(env='scc', mode='work', outputEvery=True, trainSliding=False, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), 
                 dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp='all', 
                 selectIntensity=[100], metadata=None, anomalyTrain=sys.argv[6], 
-                simVecThres=0.5, onlyOneFold=False, invertTrainTest=False, oneShot=True)
+                simVecThres=0.5, onlyOneFold=False, invertTrainTest=False, oneShot=False)
     hd.genMetricVecs()
     hd.normalize()
     hd.slidingWindow()
     hd.encoding()
     hd.trainTest()
-    hd.confusionMatrix()
+    #hd.confusionMatrix()
     
 class HD:
     def __init__(self, env='dell', mode='work', outFile=None, outputEvery=False, windowSize=5, trainMethod='closest', downSample=1, 
@@ -602,8 +603,8 @@ class HD:
                 results.to_csv('/projectnb/peaclab-mon/yijia/HDcomputing/results_window%d_downsample%d_trainWith%s_dim%d_seed%d_trainSliding.csv' % (self.windowSize, 
                                                                 self.downSample, self.trainMethod, self.dimension, self.seed))
             else:
-                results.to_csv('/projectnb/peaclab-mon/yijia/HDcomputing/results_window%d_downsample%d_trainWith%s_dim%d_seed%d_trainPeriodic.csv' % (self.windowSize, 
-                                                                self.downSample, self.trainMethod, self.dimension, self.seed))
+                results.to_csv('/projectnb/peaclab-mon/yijia/HDcomputing/results_window%d_downsample%d_trainWith%s_dim%d_seed%d_trainPeriodic_trainOne_%s.csv' % (self.windowSize, 
+                                                                self.downSample, self.trainMethod, self.dimension, self.seed, self.anomalyTrain))
         print('f1: %.3f, accuracy: %.3f' % (f1, accuracy))
         if self.fout is not None:
             with open(self.fout, 'a') as f:
