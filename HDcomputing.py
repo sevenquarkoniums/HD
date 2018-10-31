@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-
+Do hyperdimensional computing to detect anomalies.
 
 
 run by:
@@ -74,13 +74,13 @@ def scc():
     hd = HD(env='scc', mode='work', outputEvery=True, trainSliding=False, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), 
                 dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp='all', 
                 selectIntensity=[100], metadata=None, anomalyTrain=sys.argv[6], 
-                simVecThres=0.5, onlyOneFold=False, invertTrainTest=False, oneShot=False)
+                simVecThres=0.1, onlyOneFold=False, invertTrainTest=False, oneShot=False)
     hd.genMetricVecs()
     hd.normalize()
     hd.slidingWindow()
     hd.encoding()
     hd.trainTest()
-    #hd.confusionMatrix()
+    hd.confusionMatrix()
     
 class HD:
     def __init__(self, env='dell', mode='work', outFile=None, outputEvery=False, windowSize=5, trainMethod='closest', downSample=1, 
@@ -527,7 +527,6 @@ class HD:
                                 noSimilar = False
                                 self.represent[itype][ivector] = self.add(vector, self.encoded[itype][ifile][iwindow])
                                 break
-                                #self.represent[itype] = self.add(self.represent[itype], self.encoded[itype][ifile][iwindow])
                         if noSimilar:
                             self.represent[itype].append(self.encoded[itype][ifile][iwindow])
                 if self.trainMethod == 'addFilter':
@@ -604,7 +603,7 @@ class HD:
                 results.to_csv('/projectnb/peaclab-mon/yijia/HDcomputing/results_window%d_downsample%d_trainWith%s_dim%d_seed%d_trainSliding.csv' % (self.windowSize, 
                                                                 self.downSample, self.trainMethod, self.dimension, self.seed))
             else:
-                results.to_csv('/projectnb/peaclab-mon/yijia/HDcomputing/results_window%d_downsample%d_trainWith%s_dim%d_seed%d_trainPeriodic_trainOne_%s.csv' % (self.windowSize, 
+                results.to_csv('/projectnb/peaclab-mon/yijia/HDcomputing/results_window%d_downsample%d_trainWith%s_dim%d_seed%d_trainPeriodic_%s.csv' % (self.windowSize, 
                                                                 self.downSample, self.trainMethod, self.dimension, self.seed, self.anomalyTrain))
         print('f1: %.3f, accuracy: %.3f' % (f1, accuracy))
         if self.fout is not None:
