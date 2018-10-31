@@ -32,7 +32,7 @@ import matplotlib.pyplot as plt
 plt.switch_backend('agg') # for running in linux batch job.
 
 def main():
-    drawAppCombine()
+#    drawAppCombine()
 #    drawTPDS()
     #readResults()
     #apps()
@@ -40,7 +40,7 @@ def main():
 #    updateFold()
 #    normal()
     #drawFromResult()
-#    scc()
+    scc()
     #gridSearch()
     #windowSize()
     #dimension()
@@ -74,7 +74,7 @@ def scc():
     hd = HD(env='scc', mode='work', outputEvery=True, trainSliding=False, windowSize=int(sys.argv[1]), downSample=int(sys.argv[2]), 
                 dimension=int(sys.argv[4]), trainMethod=sys.argv[3], seed=int(sys.argv[5]), selectApp='all', 
                 selectIntensity=[100], metadata=None, anomalyTrain=sys.argv[6], 
-                simVecThres=0.1, onlyOneFold=False, invertTrainTest=False, oneShot=False)
+                simVecThres=0.1, onlyOneFold=True, invertTrainTest=False, oneShot=False)
     hd.genMetricVecs()
     hd.normalize()
     hd.slidingWindow()
@@ -939,19 +939,22 @@ def gridSearch():
             hd.test()
 
 def drawTPDS():
-    file = pd.read_hdf('C:/Programming/monitoring/HDcomputing/tpds_trainbtcg_entire.hdf')
-    print(file.columns)
-    drawMatrix(['dcopy','leak','linkclog','memeater','dial','none'], file['actual_label'], file['RandomForest'],
-               'C:/Programming/monitoring/HDcomputing/tpds_trainbtcg_entire.png')
+#    file = pd.read_hdf('C:/Programming/monitoring/HDcomputing/metadata_13/45_sec_window/result_rep_0.hdf')
+    files = []
+    for i in range(1, 12):
+        files.append(pd.read_hdf('C:/Programming/monitoring/HDcomputing/one_shot/result_rep_%d.hdf' % i))
+    file = pd.concat(files, ignore_index=True)
+    drawMatrix(['dcopy','leak','linkclog','dial','memeater','none'], file['actual_label'], file['RandomForest'],
+               'C:/Programming/monitoring/HDcomputing/comprehensive/tpds_oneShot.png')
 
 def drawAppCombine():
     files = []
     for app in ['bt','cg','CoMD','ft','kripke','lu','mg','miniAMR','miniGhost','miniMD','sp']:
-        files.append(pd.read_csv('C:/Programming/monitoring/HDcomputing/comprehensive/results_window1_downsample45_trainWithclosest_dim10000_seed0_trainPeriodic_trainOne_%s.csv'
+        files.append(pd.read_csv('C:/Programming/monitoring/HDcomputing/comprehensive/results_window1_downsample45_trainWithclosest_dim10000_seed0_trainPeriodic_oneShot_%s.csv'
                             % app))
     combined = pd.concat(files, ignore_index=True)
-    drawMatrix(['dcopy','leak','linkclog','dial','memeater','none'], file['truth'], file['predict'],
-               'C:/Programming/monitoring/HDcomputing/comprehensive/window1_downsample45_trainWithclosest_dim10000_seed0_trainPeriodic_trainOne.png')
+    drawMatrix(['dcopy','leak','linkclog','dial','memeater','none'], combined['truth'], combined['predict'],
+               'C:/Programming/monitoring/HDcomputing/comprehensive/window1_downsample45_trainWithclosest_dim10000_seed0_trainPeriodic_oneShot.png')
 
 def drawMatrix(classes, truth, predict, output):
     from sklearn.metrics import confusion_matrix

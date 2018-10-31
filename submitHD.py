@@ -4,7 +4,7 @@ from subprocess import call
 
 for windowSize in [1]:
     for downSample in [45]:#[2**x for x in range(7)]:
-        for trainMethod in ['addFilter','HDadd','HDaddSimilar']:
+        for trainMethod in ['HDaddSimilar']:#['closest','addFilter','HDadd','HDaddSimilar']
             for dimension in [10000]:
                 for seed in [0]:
                     for anomalyTrain in ['all']:#['bt','cg','CoMD','ft','kripke','lu','mg','miniAMR','miniGhost','miniMD','sp']:
