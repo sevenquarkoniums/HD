@@ -32,6 +32,7 @@ import matplotlib.pyplot as plt
 plt.switch_backend('agg') # for running in linux batch job.
 
 def main():
+    drawAppCombine()
 #    drawTPDS()
     #readResults()
     #apps()
@@ -39,7 +40,7 @@ def main():
 #    updateFold()
 #    normal()
     #drawFromResult()
-    scc()
+#    scc()
     #gridSearch()
     #windowSize()
     #dimension()
@@ -943,6 +944,15 @@ def drawTPDS():
     print(file.columns)
     drawMatrix(['dcopy','leak','linkclog','memeater','dial','none'], file['actual_label'], file['RandomForest'],
                'C:/Programming/monitoring/HDcomputing/tpds_trainbtcg_entire.png')
+
+def drawAppCombine():
+    files = []
+    for app in ['bt','cg','CoMD','ft','kripke','lu','mg','miniAMR','miniGhost','miniMD','sp']:
+        files.append(pd.read_csv('C:/Programming/monitoring/HDcomputing/comprehensive/results_window1_downsample45_trainWithclosest_dim10000_seed0_trainPeriodic_trainOne_%s.csv'
+                            % app))
+    combined = pd.concat(files, ignore_index=True)
+    drawMatrix(['dcopy','leak','linkclog','dial','memeater','none'], file['truth'], file['predict'],
+               'C:/Programming/monitoring/HDcomputing/comprehensive/window1_downsample45_trainWithclosest_dim10000_seed0_trainPeriodic_trainOne.png')
 
 def drawMatrix(classes, truth, predict, output):
     from sklearn.metrics import confusion_matrix
