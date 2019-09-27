@@ -17,7 +17,7 @@ get nonConstantMetrics from all data.
 
 """
 #=========================
-
+SCCWORKDIR = '/projectnb/peaclab-mon/yijia'
 
 #=========================
 import datetime
@@ -115,7 +115,7 @@ class HD:
             self.metricFileName = 'C:/Programming/monitoring/HD/nonConstantMetrics.txt'
         elif self.env == 'scc':
             self.dataFolder = '/projectnb/peaclab-mon/yijia/data/volta'
-            self.metricFileName = '/projectnb/peaclab-mon/yijia/HD/nonConstantMetrics.txt'
+            self.metricFileName = '%s/HD/nonConstantMetrics.txt' % SCCWORKDIR
         self.numFold = 5
         self.closeCriterion = 0.05 # for d=10000, 0.01 is too small.
         self.sequenceMode = 'shift'# shift, permutate. Random permutate is 100x slow.
@@ -600,10 +600,10 @@ class HD:
             results['truth'] = self.truth
             results['predict'] = self.predict
             if self.trainSliding:
-                results.to_csv('/projectnb/peaclab-mon/yijia/HDcomputing/results_window%d_downsample%d_trainWith%s_dim%d_seed%d_trainSliding.csv' % (self.windowSize, 
+                results.to_csv('%s/HDcomputing/results_window%d_downsample%d_trainWith%s_dim%d_seed%d_trainSliding.csv' % (SCCWORKDIR, self.windowSize, 
                                                                 self.downSample, self.trainMethod, self.dimension, self.seed))
             else:
-                results.to_csv('/projectnb/peaclab-mon/yijia/HDcomputing/results_window%d_downsample%d_trainWith%s_dim%d_seed%d_trainPeriodic_%s.csv' % (self.windowSize, 
+                results.to_csv('%s/HDcomputing/results_window%d_downsample%d_trainWith%s_dim%d_seed%d_trainPeriodic_%s.csv' % (SCCWORKDIR, self.windowSize, 
                                                                 self.downSample, self.trainMethod, self.dimension, self.seed, self.anomalyTrain))
         print('f1: %.3f, accuracy: %.3f' % (f1, accuracy))
         if self.fout is not None:
@@ -691,7 +691,7 @@ class HD:
         if self.env == 'dell':
             plt.savefig('C:/Programming/monitoring/HDcomputing/matrix%s.png' % (suffix), bbox_extra_artists=(y,x,), bbox_inches='tight')
         if self.env == 'scc':
-            plt.savefig('/projectnb/peaclab-mon/yijia/HDcomputing/matrix%s.png' % (suffix), bbox_extra_artists=(y,x,), bbox_inches='tight')
+            plt.savefig('%s/HDcomputing/matrix%s.png' % (SCCWORKDIR, suffix), bbox_extra_artists=(y,x,), bbox_inches='tight')
     
     def draw(self):
         fs = 25

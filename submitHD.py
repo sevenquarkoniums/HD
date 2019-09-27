@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+WORKDIR = '/projectnb/peaclab-mon/yijia'
 from subprocess import call
 
 for windowSize in [1]:
@@ -17,8 +17,8 @@ for windowSize in [1]:
                         elif downSample >= 20:
                             mem = 15
                         name = 'HD_window%d_downsample%d_trainWith%s_dim%d_seed%d_%s' % (windowSize, downSample, trainMethod, dimension, seed, anomalyTrain)
-                        shfile = '/projectnb/peaclab-mon/yijia/HDcomputing/sh/%s.sh' % (name) 
-                        outpath = '/projectnb/peaclab-mon/yijia/HDcomputing/out/%s.out' % (name)
+                        shfile = '%s/HDcomputing/sh/%s.sh' % (WORKDIR, name) 
+                        outpath = '%s/HDcomputing/out/%s.out' % (WORKDIR, name)
                         fsh = open(shfile, 'w')
                         line = '#!/bin/bash -l\n'
                         line += 'module load anaconda3\n'
