@@ -2,18 +2,14 @@
 """
 Do hyperdimensional computing to detect anomalies.
 
-
-run by:
-
-
 ### TODO ###
 get nonConstantMetrics from all data.
 
 ### warning ###
-1 need to use a fixed random seed.
+1 better use a fixed random seed.
 2 be careful with printing without newline.
-3 only using input X.
-4 need to change outputFile name.
+3 currently only using input X, and anomaly intensity 100.
+4 remember to change outputFile name.
 
 """
 #=========================
